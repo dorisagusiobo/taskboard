@@ -23,6 +23,7 @@ docker run --rm -d `
     --name $containerName `
     -p 8000:8000 `
     --env-file .env `
+    -v project-management-mvp-data:/app/data `
     project-management-mvp | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "Docker container failed to run."

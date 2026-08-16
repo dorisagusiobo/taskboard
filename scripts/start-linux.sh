@@ -15,6 +15,7 @@ docker run --rm -d \
   --name project-management-mvp \
   -p 8000:8000 \
   --env-file .env \
+  -v project-management-mvp-data:/app/data \
   project-management-mvp >/dev/null
 
 for ((attempt = 1; attempt <= 30; attempt++)); do

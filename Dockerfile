@@ -18,6 +18,7 @@ COPY backend/pyproject.toml backend/uv.lock* ./
 RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev --no-install-project
 
 COPY backend/main.py ./main.py
+COPY backend/database.py ./database.py
 COPY --from=frontend-builder /app/frontend/out ./static
 
 EXPOSE 8000

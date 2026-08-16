@@ -1,15 +1,9 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 import main
-
-
-@pytest.fixture
-def client():
-    with TestClient(
-        main.create_app(session_secret="test-session-secret")
-    ) as test_client:
-        yield test_client
 
 
 def test_health_endpoint_returns_ok(client):
@@ -28,7 +22,9 @@ def test_root_page_loads_html_and_calls_api(client):
     assert "API status: ok" in response.text
 
 
-def test_static_frontend_is_served_when_present(tmp_path, monkeypatch):
+def test_static_frontend_is_served_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     static_dir = tmp_path / "static"
     static_dir.mkdir()
     assets_dir = static_dir / "_next" / "static"
@@ -40,7 +36,7 @@ def test_static_frontend_is_served_when_present(tmp_path, monkeypatch):
     (assets_dir / "app.js").write_text("console.log('ready')", encoding="utf-8")
 
     monkeypatch.setattr(main, "STATIC_DIR", static_dir)
-    test_app = main.create_app()
+    test_app = main.create_app(database_path=tmp_path / "test.sqlite3")
 
     with TestClient(test_app) as test_client:
         response = test_client.get("/")

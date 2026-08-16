@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "database": "sqlite",
+  "database_file": "data/project-management.sqlite3",
+  "required_pragmas": {
+    "foreign_keys": "ON"
+  },
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "autoincrement": true
+        },
+        {
+          "name": "username",
+          "type": "TEXT",
+          "nullable": false,
+          "collation": "NOCASE"
+        }
+      ],
+      "constraints": [
+        {
+          "type": "unique",
+          "columns": ["username"]
+        },
+        {
+          "type": "check",
+          "expression": "length(trim(username)) > 0"
+        }
+      ]
+    },
+    {
+      "name": "boards",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "autoincrement": true
+        },
+        {
+          "name": "user_id",
+          "type": "INTEGER",
+          "nullable": false
+        }
+      ],
+      "constraints": [
+        {
+          "type": "unique",
+          "columns": ["user_id"]
+        },
+        {
+          "type": "foreign_key",
+          "columns": ["user_id"],
+          "references": {
+            "table": "users",
+            "columns": ["id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ]
+    },
+    {
+      "name": "board_columns",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "autoincrement": true
+        },
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "INTEGER",
+          "nullable": false
+        }
+      ],
+      "constraints": [
+        {
+          "type": "unique",
+          "columns": ["id", "board_id"]
+        },
+        {
+          "type": "unique",
+          "columns": ["board_id", "position"]
+        },
+        {
+          "type": "check",
+          "expression": "length(trim(title)) > 0"
+        },
+        {
+          "type": "check",
+          "expression": "position >= 0"
+        },
+        {
+          "type": "foreign_key",
+          "columns": ["board_id"],
+          "references": {
+            "table": "boards",
+            "columns": ["id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ]
+    },
+    {
+      "name": "cards",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": true,
+          "autoincrement": true
+        },
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "column_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "details",
+          "type": "TEXT",
+          "nullable": false,
+          "default": ""
+        },
+        {
+          "name": "position",
+          "type": "INTEGER",
+          "nullable": false
+        }
+      ],
+      "constraints": [
+        {
+          "type": "unique",
+          "columns": ["column_id", "position"]
+        },
+        {
+          "type": "check",
+          "expression": "length(trim(title)) > 0"
+        },
+        {
+          "type": "check",
+          "expression": "position >= 0"
+        },
+        {
+          "type": "foreign_key",
+          "columns": ["column_id", "board_id"],
+          "references": {
+            "table": "board_columns",
+            "columns": ["id", "board_id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_cards_board_id",
+          "columns": ["board_id"],
+          "unique": false
+        }
+      ]
+    }
+  ],
+  "seed": {
+    "user": {
+      "username": "user"
+    },
+    "board": {
+      "columns": [
+        {"position": 0, "title": "Backlog"},
+        {"position": 1, "title": "Discovery"},
+        {"position": 2, "title": "In Progress"},
+        {"position": 3, "title": "Review"},
+        {"position": 4, "title": "Done"}
+      ],
+      "cards": [
+        {
+          "column_position": 0,
+          "position": 0,
+          "title": "Align roadmap themes",
+          "details": "Draft quarterly themes with impact statements and metrics."
+        },
+        {
+          "column_position": 0,
+          "position": 1,
+          "title": "Gather customer signals",
+          "details": "Review support tags, sales notes, and churn feedback."
+        },
+        {
+          "column_position": 1,
+          "position": 0,
+          "title": "Prototype analytics view",
+          "details": "Sketch initial dashboard layout and key drill-downs."
+        },
+        {
+          "column_position": 2,
+          "position": 0,
+          "title": "Refine status language",
+          "details": "Standardize column labels and tone across the board."
+        },
+        {
+          "column_position": 2,
+          "position": 1,
+          "title": "Design card layout",
+          "details": "Add hierarchy and spacing for scanning dense lists."
+        },
+        {
+          "column_position": 3,
+          "position": 0,
+          "title": "QA micro-interactions",
+          "details": "Verify hover, focus, and loading states."
+        },
+        {
+          "column_position": 4,
+          "position": 0,
+          "title": "Ship marketing page",
+          "details": "Final copy approved and asset pack delivered."
+        },
+        {
+          "column_position": 4,
+          "position": 1,
+          "title": "Close onboarding sprint",
+          "details": "Document release notes and share internally."
+        }
+      ]
+    },
+    "behavior": "Find or create the MVP user by username. Create and seed a board only when that user has no board. Never reseed or overwrite an existing board."
+  },
+  "application_invariants": [
+    "Each initialized board has exactly five columns.",
+    "Columns may be renamed but may not be created, deleted, or reordered through the API.",
+    "Card positions within each column are contiguous integers beginning at zero after every committed mutation.",
+    "The authenticated session determines the user; clients never submit a user_id or board_id to select ownership."
+  ],
+  "conversation_history": {
+    "persistence": "none",
+    "source": "authenticated browser memory",
+    "maximum_messages_sent_to_ai": 20,
+    "cleared_on": ["page reload", "logout", "browser tab close"]
+  }
+}

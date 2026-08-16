@@ -128,63 +128,63 @@
 - [x] `user` / `password` grants access to the board; incorrect credentials do not.
 - [x] Logout removes access to the board and protected APIs.
 - [x] Coverage thresholds and authentication integration tests pass.
-- [ ] The user explicitly approves Part 4 and authorizes Part 5.
+- [x] The user explicitly approves Part 4 and authorizes Part 5.
 
 ## Part 5: SQLite data-model proposal
 
 ### Implementation checklist
 
-- [ ] Review current board data and the authentication/user ownership requirements.
-- [ ] Resolve with the user any data-lifetime decisions needed by later AI conversation history.
-- [ ] Design the smallest relational schema that supports multiple users, one board per user, fixed-but-renamable ordered columns, ordered cards, and editable card content.
-- [ ] Define primary keys, foreign keys, uniqueness constraints, ordering fields, ownership boundaries, and delete behavior.
-- [ ] Define initialization and seed-data behavior for the MVP user and first board.
-- [ ] Save a machine-readable representation as `docs/database-schema.json`.
-- [ ] Document the SQLite approach and schema rationale in `docs/DATABASE.md`.
-- [ ] Do not implement the database or API in this part.
+- [x] Review current board data and the authentication/user ownership requirements.
+- [x] Resolve with the user any data-lifetime decisions needed by later AI conversation history.
+- [x] Design the smallest relational schema that supports multiple users, one board per user, fixed-but-renamable ordered columns, ordered cards, and editable card content.
+- [x] Define primary keys, foreign keys, uniqueness constraints, ordering fields, ownership boundaries, and delete behavior.
+- [x] Define initialization and seed-data behavior for the MVP user and first board.
+- [x] Save a machine-readable representation as `docs/database-schema.json`.
+- [x] Document the SQLite approach and schema rationale in `docs/DATABASE.md`.
+- [x] Do not implement the database or API in this part.
 
 ### Validation checklist
 
-- [ ] Parse and validate `docs/database-schema.json` as JSON.
-- [ ] Walk through create, edit, delete, rename, reorder, cross-column move, and per-user board lookup against the proposed schema.
-- [ ] Confirm the schema can enforce one board per user and cannot mix cards/columns between users.
-- [ ] Review the proposal for unnecessary tables or fields.
+- [x] Parse and validate `docs/database-schema.json` as JSON.
+- [x] Walk through create, edit, delete, rename, reorder, cross-column move, and per-user board lookup against the proposed schema.
+- [x] Confirm the schema can enforce one board per user and cannot mix cards/columns between users.
+- [x] Review the proposal for unnecessary tables or fields.
 
 ### Success criteria
 
-- [ ] The JSON schema document and concise database rationale are complete and consistent.
-- [ ] The proposal covers current board behavior and future multiple-user ownership without expanding the MVP UI.
-- [ ] The user explicitly approves the schema and Part 5, authorizing Part 6.
+- [x] The JSON schema document and concise database rationale are complete and consistent.
+- [x] The proposal covers current board behavior and future multiple-user ownership without expanding the MVP UI.
+- [x] The user explicitly approves the schema and Part 5, authorizing Part 6.
 
 ## Part 6: Persistent backend board API
 
 ### Implementation checklist
 
-- [ ] Implement the approved SQLite schema and enable foreign-key enforcement.
-- [ ] Create and initialize the database automatically when it does not exist.
-- [ ] Seed the MVP user and initial board idempotently without overwriting existing data.
-- [ ] Resolve the current user from the authenticated session; do not accept arbitrary user ownership from the client.
-- [ ] Add API operations to read the board, rename columns, create/edit/delete cards, and move/reorder cards.
-- [ ] Keep the fixed column set: columns can be renamed but not created or deleted.
-- [ ] Validate request and response bodies with typed models.
-- [ ] Make move/reorder mutations transactional and return a canonical board representation.
-- [ ] Return simple, consistent errors for invalid input, missing resources, and ownership violations.
+- [x] Implement the approved SQLite schema and enable foreign-key enforcement.
+- [x] Create and initialize the database automatically when it does not exist.
+- [x] Seed the MVP user and initial board idempotently without overwriting existing data.
+- [x] Resolve the current user from the authenticated session; do not accept arbitrary user ownership from the client.
+- [x] Add API operations to read the board, rename columns, create/edit/delete cards, and move/reorder cards.
+- [x] Keep the fixed column set: columns can be renamed but not created or deleted.
+- [x] Validate request and response bodies with typed models.
+- [x] Make move/reorder mutations transactional and return a canonical board representation.
+- [x] Return simple, consistent errors for invalid input, missing resources, and ownership violations.
 
 ### Test checklist
 
-- [ ] Add unit tests for validation, board serialization, initialization, and mutation logic.
-- [ ] Add API integration tests using a real temporary SQLite database for every success and failure path.
-- [ ] Verify initialization is idempotent and an existing database is preserved.
-- [ ] Verify ordering, cross-column moves, edits, deletes, and column renames persist after reconnecting to the database.
-- [ ] Verify unauthenticated and cross-user access is rejected.
-- [ ] Run backend linting/type checks, unit tests with at least 80% coverage, and API/SQLite integration tests.
+- [x] Add unit tests for validation, board serialization, initialization, and mutation logic.
+- [x] Add API integration tests using a real temporary SQLite database for every success and failure path.
+- [x] Verify initialization is idempotent and an existing database is preserved.
+- [x] Verify ordering, cross-column moves, edits, deletes, and column renames persist after reconnecting to the database.
+- [x] Verify unauthenticated and cross-user access is rejected.
+- [x] Run backend linting/type checks, unit tests with at least 80% coverage, and API/SQLite integration tests.
 
 ### Success criteria
 
-- [ ] The authenticated user's board can be fully read and mutated through the API.
-- [ ] Data survives application restarts, and missing databases initialize automatically.
-- [ ] Invalid or unauthorized mutations cannot corrupt board state.
-- [ ] Backend coverage and API/SQLite integration tests pass.
+- [x] The authenticated user's board can be fully read and mutated through the API.
+- [x] Data survives application restarts, and missing databases initialize automatically.
+- [x] Invalid or unauthorized mutations cannot corrupt board state.
+- [x] Backend coverage and API/SQLite integration tests pass.
 - [ ] The user explicitly approves Part 6 and authorizes Part 7.
 
 ## Part 7: Connect the frontend to the persistent backend
