@@ -43,4 +43,43 @@ describe("KanbanBoard", () => {
 
     expect(within(column).queryByText("New card")).not.toBeInTheDocument();
   });
+
+  it("uses default details when a card is added without notes", async () => {
+    render(<KanbanBoard />);
+    const column = getFirstColumn();
+
+    await userEvent.click(
+      within(column).getByRole("button", { name: /add a card/i })
+    );
+    await userEvent.type(
+      within(column).getByPlaceholderText(/card title/i),
+      "No notes"
+    );
+    await userEvent.click(
+      within(column).getByRole("button", { name: /add card/i })
+    );
+
+    expect(within(column).getByText("No details yet.")).toBeInTheDocument();
+  });
+
+  it("clears a draft when adding a card is cancelled", async () => {
+    render(<KanbanBoard />);
+    const column = getFirstColumn();
+
+    await userEvent.click(
+      within(column).getByRole("button", { name: /add a card/i })
+    );
+    await userEvent.type(
+      within(column).getByPlaceholderText(/card title/i),
+      "Discard me"
+    );
+    await userEvent.click(
+      within(column).getByRole("button", { name: /cancel/i })
+    );
+    await userEvent.click(
+      within(column).getByRole("button", { name: /add a card/i })
+    );
+
+    expect(within(column).getByPlaceholderText(/card title/i)).toHaveValue("");
+  });
 });
