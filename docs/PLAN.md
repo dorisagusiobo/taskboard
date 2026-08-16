@@ -10,6 +10,57 @@
 - Keep the application local-first and package the finished system in one Docker container.
 - Never commit secrets. Read `OPENROUTER_API_KEY` from the project-root `.env` file at runtime.
 
+## Current delivery status
+
+- Parts 1 through 6 are implemented, verified, and explicitly approved.
+- Part 7 is implemented and verified; it is awaiting explicit user approval before Part 8 begins.
+- Parts 8 through 10 have not started.
+
+## Approved design decisions through Part 7
+
+### Runtime and application architecture
+
+- Build the Next.js App Router frontend as a static export. FastAPI serves that export at `/` and owns all `/api/*` routes; the production container does not run a Next.js server.
+- Package the frontend build and Python application in one multi-stage Docker image. The container exposes port 8000 and uses `/api/health` for its health check.
+- Keep browser requests on relative, same-origin `/api/*` URLs. No separate frontend runtime, proxy layer, or CORS configuration is needed for the local MVP.
+- Use the platform start/stop scripts as the supported local runtime interface. Board data lives in the named Docker volume `project-management-mvp-data`, so stopping, restarting, or rebuilding the container does not reset it.
+
+### Authentication and session policy
+
+- Keep the MVP credential `user` / `password` entirely on the backend. The database stores user identity but not a password while authentication remains hardcoded.
+- Store only the authenticated username in the signed, HTTP-only `pm_session` cookie. The cookie is a browser-session cookie with `SameSite=Lax`; secure-only cookies are disabled because the MVP runs over local HTTP.
+- Use `SESSION_SECRET` when supplied. If it is absent, generate an in-process secret, accepting that existing sessions become invalid after an application restart.
+- Derive board ownership exclusively from the signed session. Clients cannot submit a user ID or board ID to select another user's data.
+
+### Persistence and board domain
+
+- Use Python's standard `sqlite3` module without an ORM. The schema contains only `users`, `boards`, `board_columns`, and `cards`.
+- Enforce one board per user, five fixed ordered columns per seeded board, editable column titles, and ordered editable cards. Columns cannot be created, deleted, or reordered through the MVP API.
+- Enable SQLite foreign keys on every connection and use composite ownership constraints so a card cannot reference a column on another board.
+- Initialize the schema and seed the fixed MVP user, board, five columns, and demo cards only when missing. Startup is idempotent and never resets an existing board.
+- Make delete, reorder, and cross-column move operations transactional. Resolve transient unique-position conflicts by moving affected positions out of range before writing the final contiguous order.
+- Allow `DATABASE_PATH` to override the database file for tests and local configuration. Automated tests use isolated temporary databases and never touch developer data.
+
+### Frontend state and interaction model
+
+- Treat server-assigned numeric IDs and the backend's complete board response as canonical state. The frontend contains no bundled board state or client-side ID generator after authentication.
+- Use confirmed, non-optimistic mutations: permit only one board mutation at a time and replace local board state only after the API succeeds. On failure, keep the last confirmed board and retain relevant form drafts for retry.
+- Support pointer and keyboard drag-and-drop. Frontend move logic computes only the requested destination; ordering and ownership rules remain authoritative on the backend.
+- Require an explicit save for column renames and provide card create, edit, delete, reorder, and cross-column move controls. An expired API session returns the user to sign-in.
+
+### AI conversation lifetime
+
+- Do not persist AI conversation history in SQLite for the MVP. Keep it in browser memory, send at most the latest 20 messages, and clear it on reload, logout, or tab close.
+- Keep all future OpenRouter traffic and `OPENROUTER_API_KEY` access on the backend. Parts 8 through 10 will implement this behavior; no AI code exists yet.
+
+### Latest verified baseline (end of Part 7)
+
+- Backend: Ruff and mypy passed; 22 pytest tests passed with 97.22% coverage.
+- Frontend: ESLint and TypeScript checks passed; 26 Vitest tests passed with 93.11% overall coverage and every configured metric above 80%.
+- Production: the Next.js static export and Docker image built successfully.
+- End to end: four Playwright browser tests passed against the Docker-served application, followed by a separate persistence test after restarting the same container volume.
+- The Docker browser suite uses an isolated container, port, and temporary named volume, then removes its test resources on exit.
+
 ## Test and quality standard
 
 - Frontend unit tests use Vitest and Testing Library. Backend unit tests use pytest.
