@@ -233,22 +233,7 @@ class BoardStore:
         try:
             connection.execute("BEGIN IMMEDIATE")
             board_id = self._owned_board_id(connection, username)
-            self._require_column(connection, board_id, column_id)
-            position = connection.execute(
-                """
-                SELECT coalesce(max(position), -1) + 1
-                FROM cards
-                WHERE column_id = ? AND board_id = ?
-                """,
-                (column_id, board_id),
-            ).fetchone()[0]
-            connection.execute(
-                """
-                INSERT INTO cards (board_id, column_id, title, details, position)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (board_id, column_id, title, details, position),
-            )
+            self._create_card(connection, board_id, column_id, title, details)
             connection.commit()
             return self._load_board(connection, username)
         except Exception:
@@ -269,21 +254,12 @@ class BoardStore:
         try:
             connection.execute("BEGIN IMMEDIATE")
             board_id = self._owned_board_id(connection, username)
-            self._require_card(connection, board_id, card_id)
-
-            assignments: list[str] = []
-            values: list[str | int] = []
-            if title is not None:
-                assignments.append("title = ?")
-                values.append(title)
-            if details is not None:
-                assignments.append("details = ?")
-                values.append(details)
-            values.extend((card_id, board_id))
-            connection.execute(
-                f"UPDATE cards SET {', '.join(assignments)} "
-                "WHERE id = ? AND board_id = ?",
-                values,
+            self._update_card(
+                connection,
+                board_id,
+                card_id,
+                title=title,
+                details=details,
             )
             connection.commit()
             return self._load_board(connection, username)
@@ -326,45 +302,13 @@ class BoardStore:
         try:
             connection.execute("BEGIN IMMEDIATE")
             board_id = self._owned_board_id(connection, username)
-            card = self._require_card(connection, board_id, card_id)
-            self._require_column(connection, board_id, target_column_id)
-            source_column_id = card["column_id"]
-
-            source_ids = self._ordered_card_ids(connection, source_column_id)
-            source_ids.remove(card_id)
-
-            if source_column_id == target_column_id:
-                if target_position > len(source_ids):
-                    raise InvalidPositionError
-                source_ids.insert(target_position, card_id)
-                self._shift_column_positions(connection, source_column_id)
-                self._assign_positions(connection, source_column_id, source_ids)
-            else:
-                target_ids = self._ordered_card_ids(connection, target_column_id)
-                if target_position > len(target_ids):
-                    raise InvalidPositionError
-                target_ids.insert(target_position, card_id)
-
-                self._shift_column_positions(connection, source_column_id)
-                temporary_position = self._shift_column_positions(
-                    connection, target_column_id
-                )
-                connection.execute(
-                    """
-                    UPDATE cards
-                    SET board_id = ?, column_id = ?, position = ?
-                    WHERE id = ? AND board_id = ?
-                    """,
-                    (
-                        board_id,
-                        target_column_id,
-                        temporary_position,
-                        card_id,
-                        board_id,
-                    ),
-                )
-                self._assign_positions(connection, source_column_id, source_ids)
-                self._assign_positions(connection, target_column_id, target_ids)
+            self._move_card(
+                connection,
+                board_id,
+                card_id,
+                target_column_id,
+                target_position,
+            )
 
             connection.commit()
             return self._load_board(connection, username)
@@ -373,6 +317,149 @@ class BoardStore:
             raise
         finally:
             connection.close()
+
+    def apply_board_operations(
+        self,
+        username: str,
+        operations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            board_id = self._owned_board_id(connection, username)
+            for operation in operations:
+                match operation["type"]:
+                    case "create_card":
+                        self._create_card(
+                            connection,
+                            board_id,
+                            operation["column_id"],
+                            operation["title"],
+                            operation["details"],
+                        )
+                    case "edit_card":
+                        self._update_card(
+                            connection,
+                            board_id,
+                            operation["card_id"],
+                            title=operation["title"],
+                            details=operation["details"],
+                        )
+                    case "move_card":
+                        self._move_card(
+                            connection,
+                            board_id,
+                            operation["card_id"],
+                            operation["column_id"],
+                            operation["position"],
+                        )
+                    case _:
+                        raise ValueError("Unsupported board operation")
+            connection.commit()
+            return self._load_board(connection, username)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    @classmethod
+    def _create_card(
+        cls,
+        connection: sqlite3.Connection,
+        board_id: int,
+        column_id: int,
+        title: str,
+        details: str,
+    ) -> None:
+        cls._require_column(connection, board_id, column_id)
+        position = connection.execute(
+            """
+            SELECT coalesce(max(position), -1) + 1
+            FROM cards
+            WHERE column_id = ? AND board_id = ?
+            """,
+            (column_id, board_id),
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO cards (board_id, column_id, title, details, position)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (board_id, column_id, title, details, position),
+        )
+
+    @classmethod
+    def _update_card(
+        cls,
+        connection: sqlite3.Connection,
+        board_id: int,
+        card_id: int,
+        *,
+        title: str | None,
+        details: str | None,
+    ) -> None:
+        cls._require_card(connection, board_id, card_id)
+        assignments: list[str] = []
+        values: list[str | int] = []
+        if title is not None:
+            assignments.append("title = ?")
+            values.append(title)
+        if details is not None:
+            assignments.append("details = ?")
+            values.append(details)
+        values.extend((card_id, board_id))
+        connection.execute(
+            f"UPDATE cards SET {', '.join(assignments)} WHERE id = ? AND board_id = ?",
+            values,
+        )
+
+    @classmethod
+    def _move_card(
+        cls,
+        connection: sqlite3.Connection,
+        board_id: int,
+        card_id: int,
+        target_column_id: int,
+        target_position: int,
+    ) -> None:
+        card = cls._require_card(connection, board_id, card_id)
+        cls._require_column(connection, board_id, target_column_id)
+        source_column_id = card["column_id"]
+        source_ids = cls._ordered_card_ids(connection, source_column_id)
+        source_ids.remove(card_id)
+
+        if source_column_id == target_column_id:
+            if target_position > len(source_ids):
+                raise InvalidPositionError
+            source_ids.insert(target_position, card_id)
+            cls._shift_column_positions(connection, source_column_id)
+            cls._assign_positions(connection, source_column_id, source_ids)
+            return
+
+        target_ids = cls._ordered_card_ids(connection, target_column_id)
+        if target_position > len(target_ids):
+            raise InvalidPositionError
+        target_ids.insert(target_position, card_id)
+
+        cls._shift_column_positions(connection, source_column_id)
+        temporary_position = cls._shift_column_positions(connection, target_column_id)
+        connection.execute(
+            """
+            UPDATE cards
+            SET board_id = ?, column_id = ?, position = ?
+            WHERE id = ? AND board_id = ?
+            """,
+            (
+                board_id,
+                target_column_id,
+                temporary_position,
+                card_id,
+                board_id,
+            ),
+        )
+        cls._assign_positions(connection, source_column_id, source_ids)
+        cls._assign_positions(connection, target_column_id, target_ids)
 
     @staticmethod
     def _owned_board_id(connection: sqlite3.Connection, username: str) -> int:

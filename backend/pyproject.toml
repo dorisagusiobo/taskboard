@@ -5,7 +5,9 @@ description = "Backend for the project management MVP"
 requires-python = ">=3.13"
 dependencies = [
   "fastapi>=0.115.0",
+  "httpx>=0.28.1",
   "itsdangerous>=2.2.0",
+  "openrouter>=1.1.57",
   "uvicorn[standard]>=0.34.0",
 ]
 
@@ -24,9 +26,15 @@ testpaths = ["tests"]
 addopts = [
   "--cov=main",
   "--cov=database",
+  "--cov=ai_service",
+  "--cov=openrouter_client",
   "--cov-branch",
   "--cov-report=term-missing",
   "--cov-fail-under=80",
+]
+
+markers = [
+  "live: requires live external service credentials",
 ]
 
 [tool.ruff]

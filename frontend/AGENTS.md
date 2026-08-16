@@ -13,7 +13,7 @@ These instructions apply to work under `frontend/` and supplement the repository
 - Users can rename columns and create, edit, remove, reorder, or move cards. All changes persist in SQLite.
 - Drag and drop uses pointer and keyboard sensors from `@dnd-kit/core` and `@dnd-kit/sortable`; `moveCard` in `src/lib/kanban.ts` calculates the intended destination without updating the UI optimistically.
 - `AuthGate` checks `/api/auth/me` before showing either the login form or board. Login and logout use signed, HTTP-only backend sessions.
-- AI chat has not been implemented yet.
+- The structured AI backend endpoint exists, but the AI chat sidebar is deferred to Part 10 and is not implemented in the frontend yet.
 
 ## Structure
 

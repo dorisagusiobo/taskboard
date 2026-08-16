@@ -19,6 +19,8 @@ RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev --no-install-proj
 
 COPY backend/main.py ./main.py
 COPY backend/database.py ./database.py
+COPY backend/ai_service.py ./ai_service.py
+COPY backend/openrouter_client.py ./openrouter_client.py
 COPY --from=frontend-builder /app/frontend/out ./static
 
 EXPOSE 8000

@@ -1,6 +1,6 @@
 # Backend
 
-The backend is a synchronous FastAPI application using Python's standard `sqlite3` module. `main.py` owns HTTP models, signed-session authentication, API routes, and static frontend serving. `database.py` owns schema initialization, seed data, ownership-scoped board queries, and transactional mutations.
+The backend is a synchronous FastAPI application using Python's standard `sqlite3` module. `main.py` owns HTTP models, signed-session authentication, API routes, and static frontend serving. `database.py` owns schema initialization, seed data, ownership-scoped board queries, and transactional mutations. `ai_service.py` owns the structured AI contract and prompt assembly, while `openrouter_client.py` owns the external provider boundary.
 
 ## Runtime rules
 
@@ -11,10 +11,12 @@ The backend is a synchronous FastAPI application using Python's standard `sqlite
 - Keep multi-row card moves and position compaction transactional.
 - Initialize missing data idempotently and never overwrite an existing board.
 - Keep the OpenRouter key and the fixed MVP password on the backend.
+- Validate every structured AI response before applying its operations, and apply a response's full operation list in one database transaction.
 
 ## Tests
 
 - Use a temporary SQLite database for every test; never open or modify the developer database.
 - Exercise API behavior with FastAPI's test client and real SQLite connections.
 - Maintain the configured 80% minimum branch, statement, and line coverage across `main.py` and `database.py`.
-- Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy main.py database.py`, and `uv run pytest -q` from `backend/`.
+- Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy main.py database.py ai_service.py openrouter_client.py`, and `uv run pytest -q` from `backend/`.
+- Keep the live OpenRouter test opt-in; the default suite must not require network access or credentials.

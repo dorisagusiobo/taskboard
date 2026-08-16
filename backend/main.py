@@ -1,5 +1,6 @@
 import os
 import secrets
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Self
@@ -11,12 +12,18 @@ from pydantic import BaseModel, Field, StringConstraints, model_validator
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
+from ai_service import AIChatRequest, AIResponseError, AIService
 from database import (
     BoardNotFoundError,
     BoardStore,
     CardNotFoundError,
     ColumnNotFoundError,
     InvalidPositionError,
+)
+from openrouter_client import (
+    OpenRouterClient,
+    OpenRouterConfigurationError,
+    OpenRouterRequestError,
 )
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -93,21 +100,28 @@ class MoveCardRequest(BaseModel):
     position: int = Field(ge=0)
 
 
+class AIChatResponse(BaseModel):
+    reply: str
+    board: BoardResponse | None
+
+
 def create_app(
     session_secret: str | None = None,
     database_path: str | Path | None = None,
+    openrouter_client_factory: Callable[[], OpenRouterClient] | None = None,
 ) -> FastAPI:
     resolved_database_path = Path(
         database_path or os.getenv("DATABASE_PATH") or DEFAULT_DATABASE_PATH
     )
     board_store = BoardStore(resolved_database_path)
+    resolved_openrouter_client_factory = openrouter_client_factory or OpenRouterClient
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         board_store.initialize(MVP_USERNAME)
         yield
 
-    app = FastAPI(title="Project Management MVP", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="Project Management MVP", version="0.3.0", lifespan=lifespan)
     app.state.board_store = board_store
     app.add_middleware(
         SessionMiddleware,
@@ -214,6 +228,56 @@ def create_app(
             card_id,
             payload.column_id,
             payload.position,
+        )
+
+    @app.post("/api/ai/chat", response_model=AIChatResponse)
+    def ai_chat(payload: AIChatRequest, request: Request):
+        username = authenticated_username(request)
+        board = board_store.get_board(username)
+        try:
+            ai_response = AIService(resolved_openrouter_client_factory()).respond(
+                board,
+                payload.message,
+                payload.history,
+            )
+        except OpenRouterConfigurationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service is not configured",
+            ) from error
+        except OpenRouterRequestError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="AI service is unavailable",
+            ) from error
+        except AIResponseError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="AI service returned an invalid response",
+            ) from error
+
+        if not ai_response.operations:
+            return AIChatResponse(reply=ai_response.reply, board=None)
+
+        try:
+            updated_board = board_store.apply_board_operations(
+                username,
+                [operation.model_dump() for operation in ai_response.operations],
+            )
+        except (
+            CardNotFoundError,
+            ColumnNotFoundError,
+            InvalidPositionError,
+            ValueError,
+        ) as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="AI response could not be applied",
+            ) from error
+
+        return AIChatResponse(
+            reply=ai_response.reply,
+            board=BoardResponse.model_validate(updated_board),
         )
 
     if STATIC_DIR.is_dir():

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from database import BoardNotFoundError, BoardStore
+from database import BoardNotFoundError, BoardStore, CardNotFoundError
 
 
 def test_initialization_seeds_once_and_preserves_existing_data(database_path: Path):
@@ -87,3 +87,105 @@ def test_unknown_user_has_no_board(database_path: Path):
 
     with pytest.raises(BoardNotFoundError):
         store.get_board("missing")
+
+
+def test_board_operations_apply_create_edit_and_move_atomically(database_path: Path):
+    store = BoardStore(database_path)
+    store.initialize("user")
+    board = store.get_board("user")
+    first_column = board["columns"][0]
+    target_column = board["columns"][1]
+    edited_card = first_column["cards"][0]
+    moved_card = first_column["cards"][1]
+
+    updated = store.apply_board_operations(
+        "user",
+        [
+            {
+                "type": "create_card",
+                "column_id": first_column["id"],
+                "title": "Created by AI",
+                "details": "Created details",
+            },
+            {
+                "type": "edit_card",
+                "card_id": edited_card["id"],
+                "title": "Edited by AI",
+                "details": None,
+            },
+            {
+                "type": "move_card",
+                "card_id": moved_card["id"],
+                "column_id": target_column["id"],
+                "position": 0,
+            },
+        ],
+    )
+
+    assert any(
+        card["title"] == "Created by AI" for card in updated["columns"][0]["cards"]
+    )
+    assert any(
+        card["title"] == "Edited by AI" for card in updated["columns"][0]["cards"]
+    )
+    assert updated["columns"][1]["cards"][0]["id"] == moved_card["id"]
+    assert store.get_board("user") == updated
+
+
+def test_board_operations_roll_back_every_change_when_one_is_invalid(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.initialize("user")
+    original = store.get_board("user")
+    card = original["columns"][0]["cards"][0]
+
+    with pytest.raises(CardNotFoundError):
+        store.apply_board_operations(
+            "user",
+            [
+                {
+                    "type": "edit_card",
+                    "card_id": card["id"],
+                    "title": "Must roll back",
+                    "details": None,
+                },
+                {
+                    "type": "move_card",
+                    "card_id": 99999,
+                    "column_id": original["columns"][1]["id"],
+                    "position": 0,
+                },
+            ],
+        )
+
+    assert store.get_board("user") == original
+
+
+def test_board_operations_reject_unsupported_changes_and_other_users_ids(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.initialize("user")
+    store.initialize("other")
+    user_board = store.get_board("user")
+    other_board = store.get_board("other")
+
+    with pytest.raises(ValueError, match="Unsupported board operation"):
+        store.apply_board_operations("user", [{"type": "delete_card"}])
+
+    with pytest.raises(CardNotFoundError):
+        store.apply_board_operations(
+            "user",
+            [
+                {
+                    "type": "edit_card",
+                    "card_id": other_board["columns"][0]["cards"][0]["id"],
+                    "title": "Stolen",
+                    "details": None,
+                }
+            ],
+        )
+
+    assert store.get_board("user") == user_board
+    assert store.get_board("other") == other_board

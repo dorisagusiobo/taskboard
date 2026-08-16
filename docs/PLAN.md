@@ -12,11 +12,11 @@
 
 ## Current delivery status
 
-- Parts 1 through 6 are implemented, verified, and explicitly approved.
-- Part 7 is implemented and verified; it is awaiting explicit user approval before Part 8 begins.
-- Parts 8 through 10 have not started.
+- Parts 1 through 8 are implemented, verified, and explicitly approved.
+- Part 9 is implemented and verified; it is awaiting explicit user approval before Part 10 begins.
+- Part 10 has not started.
 
-## Approved design decisions through Part 7
+## Design decisions through Part 9
 
 ### Runtime and application architecture
 
@@ -51,13 +51,29 @@
 ### AI conversation lifetime
 
 - Do not persist AI conversation history in SQLite for the MVP. Keep it in browser memory, send at most the latest 20 messages, and clear it on reload, logout, or tab close.
-- Keep all future OpenRouter traffic and `OPENROUTER_API_KEY` access on the backend. Parts 8 through 10 will implement this behavior; no AI code exists yet.
+- Keep all OpenRouter traffic and `OPENROUTER_API_KEY` access on the backend. Parts 9 and 10 will add structured board operations and the chat UI on top of the Part 8 client.
 
-### Latest verified baseline (end of Part 7)
+### OpenRouter connectivity
 
-- Backend: Ruff and mypy passed; 22 pytest tests passed with 97.22% coverage.
+- Use the official `openrouter` Python SDK and its Chat Completions API with the required `openai/gpt-oss-120b` model.
+- Read `OPENROUTER_API_KEY` only from the backend environment. Keep the connectivity check as an explicit diagnostic command rather than exposing a temporary browser-facing endpoint.
+- Apply a 30-second request timeout, disable automatic retries for predictable MVP behavior, and map configuration, network, timeout, provider, and malformed-response failures to controlled messages that do not include credentials or upstream bodies.
+- Keep the live `2+2` smoke test opt-in and outside the default deterministic coverage run.
+
+### Structured AI board operations
+
+- Expose one authenticated `POST /api/ai/chat` endpoint. Accept the current message and at most the latest 20 browser-memory `user` or `assistant` messages; do not persist conversation history.
+- Send the canonical authenticated user's board JSON, conversation history, and current message to OpenRouter. Request strict JSON Schema output and require a provider endpoint that supports the supplied parameters.
+- Require every model response to contain a user-facing `reply` and an `operations` array. Allow only closed `create_card`, `edit_card`, and `move_card` operation objects, with at most 20 operations per response.
+- Validate model JSON with Pydantic after receipt. Apply a non-empty operation list in one SQLite transaction through the same domain rules as manual mutations; any invalid or non-owned ID rolls back the full list.
+- Return `board: null` for read-only replies and the canonical updated board after successful mutations. Map provider, malformed-response, and application failures to controlled API errors.
+
+### Latest verified baseline (end of Part 9)
+
+- Backend: Ruff and mypy passed; 60 pytest tests passed, three opt-in live tests skipped, and total coverage was 97.10%.
 - Frontend: ESLint and TypeScript checks passed; 26 Vitest tests passed with 93.11% overall coverage and every configured metric above 80%.
-- Production: the Next.js static export and Docker image built successfully.
+- OpenRouter: the `2+2` diagnostic returned `4`; separate live Structured Outputs tests passed for a read-only response and a create operation applied to an isolated temporary SQLite database.
+- Production: the Next.js static export and Docker image built successfully, including the structured AI service and server-side OpenRouter client, and the Docker smoke test passed.
 - End to end: four Playwright browser tests passed against the Docker-served application, followed by a separate persistence test after restarting the same container volume.
 - The Docker browser suite uses an isolated container, port, and temporary named volume, then removes its test resources on exit.
 
@@ -264,63 +280,63 @@
 - [x] Every required manual board operation persists across reloads and container restarts.
 - [x] Loading and failure states are understandable and do not silently lose changes.
 - [x] Coverage thresholds and end-to-end persistence tests pass.
-- [ ] The user explicitly approves Part 7 and authorizes Part 8.
+- [x] The user explicitly approves Part 7 and authorizes Part 8.
 
 ## Part 8: OpenRouter connectivity
 
 ### Implementation checklist
 
-- [ ] Confirm the current OpenRouter API contract and supported client-library versions from primary documentation at implementation time.
-- [ ] Read `OPENROUTER_API_KEY` from environment configuration without exposing it to the frontend.
-- [ ] Add a minimal backend OpenRouter client using the `openai/gpt-oss-120b` model.
-- [ ] Add the smallest authenticated backend endpoint or diagnostic command needed to exercise the connection.
-- [ ] Add clear handling for missing credentials, provider errors, and timeouts without logging secrets.
-- [ ] Keep all OpenRouter traffic server-side.
+- [x] Confirm the current OpenRouter API contract and supported client-library versions from primary documentation at implementation time.
+- [x] Read `OPENROUTER_API_KEY` from environment configuration without exposing it to the frontend.
+- [x] Add a minimal backend OpenRouter client using the `openai/gpt-oss-120b` model.
+- [x] Add the smallest authenticated backend endpoint or diagnostic command needed to exercise the connection.
+- [x] Add clear handling for missing credentials, provider errors, and timeouts without logging secrets.
+- [x] Keep all OpenRouter traffic server-side.
 
 ### Test checklist
 
-- [ ] Add deterministic unit tests with the external HTTP boundary mocked.
-- [ ] Add backend integration tests for successful provider parsing and provider error mapping using a local fake response.
-- [ ] Add an explicit live smoke test that asks `2+2`, uses the project `.env` key, and verifies the answer is 4.
-- [ ] Exclude the credential-dependent live smoke test from the default offline suite and document how to run it.
-- [ ] Run backend tests with at least 80% coverage and report the live connectivity result separately.
+- [x] Add deterministic unit tests with the external HTTP boundary mocked.
+- [x] Add backend integration tests for successful provider parsing and provider error mapping using a local fake response.
+- [x] Add an explicit live smoke test that asks `2+2`, uses the project `.env` key, and verifies the answer is 4.
+- [x] Exclude the credential-dependent live smoke test from the default offline suite and document how to run it.
+- [x] Run backend tests with at least 80% coverage and report the live connectivity result separately.
 
 ### Success criteria
 
-- [ ] The backend successfully receives a correct response to the live `2+2` prompt through OpenRouter using the required model.
-- [ ] Missing keys and upstream failures produce controlled backend errors.
-- [ ] The API key never reaches browser code or logs, and the test suite stays focused on real behavior.
-- [ ] The user explicitly approves Part 8 and authorizes Part 9.
+- [x] The backend successfully receives a correct response to the live `2+2` prompt through OpenRouter using the required model.
+- [x] Missing keys and upstream failures produce controlled backend errors.
+- [x] The API key never reaches browser code or logs, and the test suite stays focused on real behavior.
+- [x] The user explicitly approves Part 8 and authorizes Part 9.
 
 ## Part 9: Structured AI board responses and mutations
 
 ### Implementation checklist
 
-- [ ] Define and document a minimal structured-output JSON schema containing a user-facing reply and optional validated board operations.
-- [ ] Define the conversation-history source and limits based on the decision approved in Part 5.
-- [ ] Send the authenticated user's canonical board JSON, current question, and relevant conversation history to OpenRouter.
-- [ ] Request Structured Outputs from `openai/gpt-oss-120b` using the documented JSON schema.
-- [ ] Validate the model response before using it.
-- [ ] Allow only the required AI operations: create, edit, and move one or more cards.
-- [ ] Apply valid AI-requested board operations transactionally through the same domain rules used by manual API changes.
-- [ ] Reject invalid IDs, ownership violations, malformed output, and unsupported changes without partially updating the board.
-- [ ] Return the assistant message and canonical updated board when a mutation occurs.
+- [x] Define and document a minimal structured-output JSON schema containing a user-facing reply and optional validated board operations.
+- [x] Define the conversation-history source and limits based on the decision approved in Part 5.
+- [x] Send the authenticated user's canonical board JSON, current question, and relevant conversation history to OpenRouter.
+- [x] Request Structured Outputs from `openai/gpt-oss-120b` using the documented JSON schema.
+- [x] Validate the model response before using it.
+- [x] Allow only the required AI operations: create, edit, and move one or more cards.
+- [x] Apply valid AI-requested board operations transactionally through the same domain rules used by manual API changes.
+- [x] Reject invalid IDs, ownership violations, malformed output, and unsupported changes without partially updating the board.
+- [x] Return the assistant message and canonical updated board when a mutation occurs.
 
 ### Test checklist
 
-- [ ] Add unit tests for prompt assembly, history inclusion, structured-output parsing, operation validation, and transactional application.
-- [ ] Cover no-change replies, each supported operation, multiple operations, invalid output, stale IDs, and rollback on failure.
-- [ ] Add API/SQLite integration tests with a deterministic fake OpenRouter service and a real temporary database.
-- [ ] Verify the model cannot access or mutate another user's board through supplied IDs or prompt content.
-- [ ] Add a small opt-in live smoke test for one read-only prompt and one harmless board mutation against a temporary test database.
-- [ ] Run both unit suites at at least 80% coverage and all structured-response integration tests.
+- [x] Add unit tests for prompt assembly, history inclusion, structured-output parsing, operation validation, and transactional application.
+- [x] Cover no-change replies, each supported operation, multiple operations, invalid output, stale IDs, and rollback on failure.
+- [x] Add API/SQLite integration tests with a deterministic fake OpenRouter service and a real temporary database.
+- [x] Verify the model cannot access or mutate another user's board through supplied IDs or prompt content.
+- [x] Add a small opt-in live smoke test for one read-only prompt and one harmless board mutation against a temporary test database.
+- [x] Run both unit suites at at least 80% coverage and all structured-response integration tests.
 
 ### Success criteria
 
-- [ ] Every AI request includes the current board, the user's question, and the intended conversation history.
-- [ ] Valid structured operations update the correct board atomically; invalid output makes no changes.
-- [ ] Responses consistently match the documented schema.
-- [ ] Coverage thresholds and deterministic AI/API/database integration tests pass.
+- [x] Every AI request includes the current board, the user's question, and the intended conversation history.
+- [x] Valid structured operations update the correct board atomically; invalid output makes no changes.
+- [x] Responses consistently match the documented schema.
+- [x] Coverage thresholds and deterministic AI/API/database integration tests pass.
 - [ ] The user explicitly approves Part 9 and authorizes Part 10.
 
 ## Part 10: AI chat sidebar and automatic board refresh
