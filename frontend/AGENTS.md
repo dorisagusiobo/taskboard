@@ -13,7 +13,7 @@ These instructions apply to work under `frontend/` and supplement the repository
 - Users can rename columns and create, edit, remove, reorder, or move cards. All changes persist in SQLite.
 - Drag and drop uses pointer and keyboard sensors from `@dnd-kit/core` and `@dnd-kit/sortable`; `moveCard` in `src/lib/kanban.ts` calculates the intended destination without updating the UI optimistically.
 - `AuthGate` checks `/api/auth/me` before showing either the login form or board. Login and logout use signed, HTTP-only backend sessions.
-- The structured AI backend endpoint exists, but the AI chat sidebar is deferred to Part 10 and is not implemented in the frontend yet.
+- `KanbanBoard` renders the **Ask AI** control, which opens `AIChatSidebar`. The sidebar keeps its draft and conversation history in component state only (cleared on reload/logout), submits to the structured `/api/ai/chat` endpoint through `KanbanBoard`, renders replies as plain text, and blocks a second submission while one is pending. A successful mutation replaces the board with the canonical response from FastAPI; a failed request keeps the last confirmed board and message draft for retry.
 
 ## Structure
 
@@ -23,7 +23,8 @@ These instructions apply to work under `frontend/` and supplement the repository
 - `src/components/KanbanCard.tsx`: sortable card and edit/remove actions.
 - `src/components/KanbanCardPreview.tsx`: drag-overlay presentation.
 - `src/components/NewCardForm.tsx`: local add-card form state and validation.
-- `src/lib/api.ts`: typed authentication and board API client plus response normalization.
+- `src/components/AIChatSidebar.tsx`: Ask AI drawer — draft/history state, submission handling, focus trap and keyboard access, pending/error display.
+- `src/lib/api.ts`: typed authentication, board, and AI chat API client plus response normalization.
 - `src/lib/kanban.ts`: board types and pure move/reorder planning logic.
 - `src/**/*.test.ts(x)`: Vitest unit/component tests.
 - `tests/`: Playwright browser tests.
@@ -57,14 +58,14 @@ npm run test:all
 - Vitest reports coverage and fails below 80% for statements, branches, functions, or lines.
 - Add or update tests in the same part as every behavior change.
 - Prefer role, label, and visible-text queries. Use test IDs only when interaction mechanics such as drag-and-drop make semantic queries impractical.
-- Integration tests must cover critical workflows through the real FastAPI API and a temporary SQLite database once those layers exist. Mock only the external OpenRouter boundary in the default suite.
+- Integration tests must cover critical workflows through the real FastAPI API and a temporary SQLite database. Mock only the external OpenRouter boundary in the default suite.
 
 ## Implementation constraints
 
 - Follow `docs/PLAN.md` in order and stop for user approval after each part.
 - Keep the frontend compatible with a static Next.js export served by FastAPI; do not introduce a dependency on a Next.js runtime server.
 - Keep backend requests under relative `/api/*` URLs so the static frontend and API share one origin.
-- Once persistence is added, treat the backend's response as canonical board state and avoid duplicating mutation rules in UI components.
+- Treat the backend's response as canonical board state and avoid duplicating mutation rules in UI components.
 - Keep the five-column set fixed. Column names may change, but the UI must not add or delete columns.
 - Keep components and state flow simple. Extract abstractions only when they remove real duplication or isolate a testable boundary.
 - Do not expose `OPENROUTER_API_KEY` or any other server secret to browser code, public environment variables, generated assets, or logs.

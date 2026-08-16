@@ -89,6 +89,18 @@ def test_unknown_user_has_no_board(database_path: Path):
         store.get_board("missing")
 
 
+def test_update_card_requires_a_title_or_details_change(database_path: Path):
+    store = BoardStore(database_path)
+    store.initialize("user")
+    board = store.get_board("user")
+    card_id = board["columns"][0]["cards"][0]["id"]
+
+    with pytest.raises(ValueError, match="title or details"):
+        store.update_card("user", card_id, title=None, details=None)
+
+    assert store.get_board("user") == board
+
+
 def test_board_operations_apply_create_edit_and_move_atomically(database_path: Path):
     store = BoardStore(database_path)
     store.initialize("user")

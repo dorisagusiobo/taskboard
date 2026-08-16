@@ -399,6 +399,8 @@ class BoardStore:
         title: str | None,
         details: str | None,
     ) -> None:
+        if title is None and details is None:
+            raise ValueError("An update must change the title or details")
         cls._require_card(connection, board_id, card_id)
         assignments: list[str] = []
         values: list[str | int] = []

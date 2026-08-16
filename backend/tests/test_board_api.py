@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -216,6 +217,10 @@ def test_validation_and_missing_resources_do_not_change_the_board(
         ),
         authenticated_client.post(
             f"/api/board/cards/{card_id}/move",
+            json={"column_id": original["columns"][1]["id"], "position": 999},
+        ),
+        authenticated_client.post(
+            f"/api/board/cards/{card_id}/move",
             json={"column_id": column_id, "position": -1},
         ),
     ]
@@ -232,8 +237,31 @@ def test_validation_and_missing_resources_do_not_change_the_board(
         404,
         422,
         422,
+        422,
     ]
     assert authenticated_client.get("/api/board").json() == original
+
+
+def test_missing_board_returns_a_controlled_404(
+    authenticated_client: TestClient, database_path: Path
+):
+    connection = sqlite3.connect(database_path)
+    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        connection.execute(
+            """
+            DELETE FROM boards
+            WHERE user_id = (SELECT id FROM users WHERE username = 'user')
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    response = authenticated_client.get("/api/board")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Board not found"}
 
 
 def test_other_users_resources_are_not_accessible(

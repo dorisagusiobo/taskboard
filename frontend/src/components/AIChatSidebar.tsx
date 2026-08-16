@@ -7,7 +7,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { ApiError, type ChatMessage } from "@/lib/api";
+import type { ChatMessage } from "@/lib/api";
 
 type AIChatSidebarProps = {
   isOpen: boolean;
@@ -88,11 +88,11 @@ export const AIChatSidebar = ({
       ]);
       setDraft("");
     } catch (requestError) {
-      setError(
-        requestError instanceof ApiError
-          ? `${requestError.message}. Your board is unchanged.`
-          : "Unable to reach the AI assistant. Your board is unchanged."
-      );
+      const detail =
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to reach the AI assistant";
+      setError(`${detail}. Your board is unchanged.`);
     } finally {
       submissionInFlight.current = false;
       setIsPending(false);

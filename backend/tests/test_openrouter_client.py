@@ -12,6 +12,7 @@ def fake_sdk(
     *,
     content: object = "4",
     request_error: Exception | None = None,
+    choices: object = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
     constructor_arguments: dict[str, object] = {}
     request_arguments: dict[str, object] = {}
@@ -21,6 +22,8 @@ def fake_sdk(
             request_arguments.update(kwargs)
             if request_error:
                 raise request_error
+            if choices is not None:
+                return SimpleNamespace(choices=choices)
             return SimpleNamespace(
                 choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
             )
@@ -141,6 +144,16 @@ def test_complete_maps_sdk_failures_without_exposing_details(
 
     assert str(caught.value) == expected_message
     assert "secret" not in str(caught.value)
+
+
+def test_complete_rejects_an_empty_choices_list(monkeypatch: pytest.MonkeyPatch):
+    fake_sdk(monkeypatch, choices=[])
+
+    with pytest.raises(
+        openrouter_client.OpenRouterRequestError,
+        match="OpenRouter returned an invalid response",
+    ):
+        openrouter_client.OpenRouterClient(api_key="test-key").complete("hello")
 
 
 @pytest.mark.parametrize("content", [None, "", ["4"]])
