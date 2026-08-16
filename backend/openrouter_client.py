@@ -26,7 +26,7 @@ class OpenRouterClient:
     def __init__(
         self,
         api_key: str | None = None,
-        server_url: str = OPENROUTER_SERVER_URL,
+        server_url: str | None = None,
         http_client: httpx.Client | None = None,
     ) -> None:
         configured_api_key = api_key or os.getenv("OPENROUTER_API_KEY") or ""
@@ -34,7 +34,9 @@ class OpenRouterClient:
         if not self.api_key:
             raise OpenRouterConfigurationError("OPENROUTER_API_KEY is not configured")
 
-        self.server_url = server_url
+        self.server_url = (
+            server_url or os.getenv("OPENROUTER_SERVER_URL") or OPENROUTER_SERVER_URL
+        )
         self.http_client = http_client
 
     def _complete(

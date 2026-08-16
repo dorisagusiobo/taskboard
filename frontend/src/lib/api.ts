@@ -4,6 +4,16 @@ export type Session = {
   username: string;
 };
 
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AIChatResult = {
+  reply: string;
+  board: ApiBoard | null;
+};
+
 type ApiCard = Card & {
   position: number;
 };
@@ -108,6 +118,12 @@ export const moveCard = (
   request<ApiBoard>(
     `/api/board/cards/${cardId}/move`,
     jsonOptions("POST", { column_id: columnId, position })
+  );
+
+export const sendAIMessage = (message: string, history: ChatMessage[]) =>
+  request<AIChatResult>(
+    "/api/ai/chat",
+    jsonOptions("POST", { message, history: history.slice(-20) })
   );
 
 export const toBoardData = (board: ApiBoard): BoardData => {

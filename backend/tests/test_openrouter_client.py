@@ -54,6 +54,7 @@ def test_complete_uses_environment_key_and_required_model(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("OPENROUTER_API_KEY", " environment-key ")
+    monkeypatch.delenv("OPENROUTER_SERVER_URL", raising=False)
     constructor_arguments, request_arguments = fake_sdk(monkeypatch)
 
     answer = openrouter_client.OpenRouterClient().complete("What is 2+2?")
@@ -74,6 +75,14 @@ def test_complete_uses_environment_key_and_required_model(
         "temperature": 0,
         "stream": False,
     }
+
+
+def test_client_supports_a_configured_server_url(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OPENROUTER_SERVER_URL", "http://fake-openrouter.test/api/v1")
+
+    client = openrouter_client.OpenRouterClient(api_key="test-key")
+
+    assert client.server_url == "http://fake-openrouter.test/api/v1"
 
 
 def test_complete_structured_requests_strict_schema_support(

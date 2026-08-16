@@ -81,6 +81,9 @@ test("persists every board mutation through the API", async ({ page }) => {
       .filter({ hasText: "Persistent card" });
     await expect(persistedCard).toBeVisible();
     await expect(persistedCard.getByText("Updated through the API")).toBeVisible();
+    await expect(page.getByText("Manual before AI")).toBeVisible();
+    await expect(page.getByText("AI single card")).toBeVisible();
+    await expect(page.getByText("AI batch card")).toBeVisible();
     return;
   }
 
@@ -192,4 +195,115 @@ test("persists every board mutation through the API", async ({ page }) => {
   if (deletedCardId) {
     await expect(page.getByTestId(deletedCardId)).toHaveCount(0);
   }
+});
+
+test("uses AI through FastAPI and preserves validated changes", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Manual before AI");
+  await firstColumn
+    .getByLabel("New card details")
+    .fill("Manual edit in the complete flow");
+  await Promise.all([
+    waitForMutation(page, /\/api\/board\/cards$/, "POST"),
+    firstColumn.getByRole("button", { name: "Add card" }).click(),
+  ]);
+  await expect(page.getByText("Manual before AI")).toBeVisible();
+
+  await page.getByRole("button", { name: "Ask AI" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ask AI" });
+  const message = dialog.getByLabel("Message");
+  await expect(message).toBeFocused();
+
+  await message.fill("Summarize the board without changes");
+  await Promise.all([
+    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    dialog.getByRole("button", { name: "Send" }).click(),
+  ]);
+  await expect(
+    dialog.getByText("I reviewed the current board and made no changes.")
+  ).toBeVisible();
+
+  await message.fill("Make a single AI change");
+  await Promise.all([
+    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    dialog.getByRole("button", { name: "Send" }).click(),
+  ]);
+  await expect(page.getByText("AI single card")).toBeVisible();
+
+  await message.fill("Make multiple AI changes");
+  await Promise.all([
+    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    dialog.getByRole("button", { name: "Send" }).click(),
+  ]);
+  await expect(page.getByText("AI edited card")).toBeVisible();
+  await expect(page.getByText("AI batch card")).toBeVisible();
+
+  await message.fill("Return a malformed response");
+  const malformedResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/ai/chat" &&
+      response.status() === 502
+  );
+  await dialog.getByRole("button", { name: "Send" }).click();
+  await malformedResponse;
+  await expect(dialog.getByRole("alert")).toContainText(
+    "AI service returned an invalid response"
+  );
+  await expect(message).toHaveValue("Return a malformed response");
+  await expect(page.getByText("AI single card")).toBeVisible();
+
+  await message.fill("Fail once then summarize");
+  const firstAttempt = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/ai/chat" &&
+      response.status() === 502
+  );
+  await dialog.getByRole("button", { name: "Send" }).click();
+  await firstAttempt;
+  await expect(message).toHaveValue("Fail once then summarize");
+  await Promise.all([
+    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    dialog.getByRole("button", { name: "Send" }).click(),
+  ]);
+  await expect(message).toHaveValue("");
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByText("Manual before AI")).toBeVisible();
+  await expect(page.getByText("AI single card")).toBeVisible();
+  await expect(page.getByText("AI batch card")).toBeVisible();
+  await page.getByRole("button", { name: "Ask AI" }).click();
+  await expect(
+    page.getByText(/Try “Summarize this board”/)
+  ).toBeVisible();
+  await expect(
+    page.getByText("I reviewed the current board and made no changes.")
+  ).toHaveCount(0);
+});
+
+test("keeps login, board forms, and chat usable from the keyboard on a narrow screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 760 });
+  await page.goto("/");
+  await page.getByLabel("Username").focus();
+  await page.getByLabel("Username").fill("user");
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Password")).toBeFocused();
+  await page.getByLabel("Password").fill("password");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Ask AI" }).focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Ask AI" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS("width", "375px");
+  await expect(dialog.getByLabel("Message")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ask AI" })).toBeFocused();
 });

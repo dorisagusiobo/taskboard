@@ -47,3 +47,7 @@ Every model response contains:
 For `edit_card`, at least one of `title` or `details` must be non-null. No delete, column, user, or board operation is supported.
 
 The backend validates the JSON again after receipt. When operations are present, it applies the complete list in one SQLite transaction using the same ownership, ordering, and validation rules as manual changes. Any invalid operation rolls back the full list. A successful mutation returns the assistant reply and canonical updated board; a read-only reply returns `board: null`.
+
+## Browser behavior
+
+The **Ask AI** drawer keeps the current draft and conversation in browser memory. It sends only the latest 20 prior messages, renders replies as plain text, and prevents overlapping board mutations. A successful mutation replaces the visible board with the canonical board returned by FastAPI. A failed request leaves the last confirmed board and message draft unchanged so the user can retry.

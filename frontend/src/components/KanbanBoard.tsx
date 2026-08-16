@@ -15,6 +15,7 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { KanbanColumn } from "@/components/KanbanColumn";
+import { AIChatSidebar } from "@/components/AIChatSidebar";
 import {
   ApiError,
   createCard,
@@ -22,9 +23,11 @@ import {
   getBoard,
   moveCard as moveCardRequest,
   renameColumn,
+  sendAIMessage,
   toBoardData,
   updateCard,
   type ApiBoard,
+  type ChatMessage,
 } from "@/lib/api";
 import { moveCard, type BoardData } from "@/lib/kanban";
 
@@ -37,7 +40,9 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
   const [activeCardId, setActiveCardId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const mutationInFlight = useRef(false);
+  const chatTriggerRef = useRef<HTMLButtonElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -87,6 +92,38 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
       mutationInFlight.current = false;
       setIsMutating(false);
     }
+  };
+
+  const handleAIMessage = async (
+    message: string,
+    history: ChatMessage[]
+  ): Promise<string> => {
+    if (mutationInFlight.current) {
+      throw new Error("A board change is already in progress");
+    }
+
+    mutationInFlight.current = true;
+    setIsMutating(true);
+    try {
+      const result = await sendAIMessage(message, history);
+      if (result.board) {
+        setBoard(toBoardData(result.board));
+      }
+      return result.reply;
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        onSessionExpired();
+      }
+      throw requestError;
+    } finally {
+      mutationInFlight.current = false;
+      setIsMutating(false);
+    }
+  };
+
+  const closeChat = () => {
+    setIsChatOpen(false);
+    chatTriggerRef.current?.focus();
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -182,13 +219,23 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
                 and capture quick notes without getting buried in settings.
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                Focus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                One board. Five columns. Zero clutter.
-              </p>
+            <div className="flex flex-col items-stretch gap-3 sm:items-end">
+              <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+                  Focus
+                </p>
+                <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
+                  One board. Five columns. Zero clutter.
+                </p>
+              </div>
+              <button
+                ref={chatTriggerRef}
+                type="button"
+                onClick={() => setIsChatOpen(true)}
+                className="rounded-full bg-[var(--secondary-purple)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-sm transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[var(--secondary-purple)] focus:ring-offset-2"
+              >
+                Ask AI
+              </button>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -241,6 +288,12 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
           </DragOverlay>
         </DndContext>
       </main>
+      <AIChatSidebar
+        isOpen={isChatOpen}
+        isBoardBusy={isMutating}
+        onClose={closeChat}
+        onSubmit={handleAIMessage}
+      />
     </div>
   );
 };

@@ -12,11 +12,10 @@
 
 ## Current delivery status
 
-- Parts 1 through 8 are implemented, verified, and explicitly approved.
-- Part 9 is implemented and verified; it is awaiting explicit user approval before Part 10 begins.
-- Part 10 has not started.
+- Parts 1 through 9 are implemented, verified, and explicitly approved.
+- Part 10 is implemented and verified; it is awaiting explicit user approval of the completed MVP.
 
-## Design decisions through Part 9
+## Design decisions through Part 10
 
 ### Runtime and application architecture
 
@@ -51,7 +50,7 @@
 ### AI conversation lifetime
 
 - Do not persist AI conversation history in SQLite for the MVP. Keep it in browser memory, send at most the latest 20 messages, and clear it on reload, logout, or tab close.
-- Keep all OpenRouter traffic and `OPENROUTER_API_KEY` access on the backend. Parts 9 and 10 will add structured board operations and the chat UI on top of the Part 8 client.
+- Keep all OpenRouter traffic and `OPENROUTER_API_KEY` access on the backend. The structured board operations and chat UI build on the server-side Part 8 client.
 
 ### OpenRouter connectivity
 
@@ -68,13 +67,13 @@
 - Validate model JSON with Pydantic after receipt. Apply a non-empty operation list in one SQLite transaction through the same domain rules as manual mutations; any invalid or non-owned ID rolls back the full list.
 - Return `board: null` for read-only replies and the canonical updated board after successful mutations. Map provider, malformed-response, and application failures to controlled API errors.
 
-### Latest verified baseline (end of Part 9)
+### Latest verified baseline (end of Part 10)
 
-- Backend: Ruff and mypy passed; 60 pytest tests passed, three opt-in live tests skipped, and total coverage was 97.10%.
-- Frontend: ESLint and TypeScript checks passed; 26 Vitest tests passed with 93.11% overall coverage and every configured metric above 80%.
-- OpenRouter: the `2+2` diagnostic returned `4`; separate live Structured Outputs tests passed for a read-only response and a create operation applied to an isolated temporary SQLite database.
-- Production: the Next.js static export and Docker image built successfully, including the structured AI service and server-side OpenRouter client, and the Docker smoke test passed.
-- End to end: four Playwright browser tests passed against the Docker-served application, followed by a separate persistence test after restarting the same container volume.
+- Backend: Ruff and mypy passed; 61 deterministic pytest tests passed, three opt-in live tests were excluded, and total coverage was 97.10%.
+- Frontend: ESLint and TypeScript checks passed; 35 Vitest tests passed with every configured coverage metric above 80%.
+- OpenRouter: the real SDK successfully exchanged a Structured Outputs request with the deterministic OpenRouter-compatible HTTP boundary. The previously verified live `2+2`, read-only, and temporary-database mutation checks remain opt-in.
+- Production: the Next.js static export and Docker image built successfully, and the Docker health/API/static/persistence smoke test passed.
+- End to end: six Playwright scenarios passed through the Docker-served frontend, FastAPI, AI validation, and SQLite, followed by a separate persistence check after restarting the same container volume.
 - The Docker browser suite uses an isolated container, port, and temporary named volume, then removes its test resources on exit.
 
 ## Test and quality standard
@@ -337,35 +336,35 @@
 - [x] Valid structured operations update the correct board atomically; invalid output makes no changes.
 - [x] Responses consistently match the documented schema.
 - [x] Coverage thresholds and deterministic AI/API/database integration tests pass.
-- [ ] The user explicitly approves Part 9 and authorizes Part 10.
+- [x] The user explicitly approves Part 9 and authorizes Part 10.
 
 ## Part 10: AI chat sidebar and automatic board refresh
 
 ### Implementation checklist
 
-- [ ] Add a polished, responsive AI chat sidebar using the approved color scheme and existing visual language.
-- [ ] Support opening/closing the sidebar, submitting messages, displaying conversation history, and showing pending/error states.
-- [ ] Connect the sidebar to the authenticated structured AI endpoint.
-- [ ] Render assistant text safely as text unless a separately tested renderer is intentionally approved.
-- [ ] When the response contains a board update, replace or refetch board state automatically from the canonical backend response.
-- [ ] Keep chat and board interactions keyboard-accessible and usable on narrow screens.
-- [ ] Prevent duplicate message submission and preserve the last confirmed board if a request fails.
-- [ ] Update concise run/test documentation for the completed MVP.
+- [x] Add a polished, responsive AI chat sidebar using the approved color scheme and existing visual language.
+- [x] Support opening/closing the sidebar, submitting messages, displaying conversation history, and showing pending/error states.
+- [x] Connect the sidebar to the authenticated structured AI endpoint.
+- [x] Render assistant text safely as text unless a separately tested renderer is intentionally approved.
+- [x] When the response contains a board update, replace or refetch board state automatically from the canonical backend response.
+- [x] Keep chat and board interactions keyboard-accessible and usable on narrow screens.
+- [x] Prevent duplicate message submission and preserve the last confirmed board if a request fails.
+- [x] Update concise run/test documentation for the completed MVP.
 
 ### Test checklist
 
-- [ ] Add frontend unit tests for sidebar state, message submission, history rendering, loading/errors, and automatic board refresh.
-- [ ] Add browser integration tests through FastAPI and SQLite with a deterministic fake OpenRouter boundary.
-- [ ] Cover chat replies without changes, single and multiple board changes, malformed/provider errors, retry behavior, and page reload behavior.
-- [ ] Run a complete Docker end-to-end flow: start, sign in, manually edit the board, ask AI to mutate it, observe automatic refresh, reload, and verify persistence.
-- [ ] Run accessibility checks for the login, board, dialogs/forms, and chat controls.
-- [ ] Run all lint/type checks, frontend and backend unit suites at at least 80% coverage, integration suites, production build, and Docker smoke tests.
+- [x] Add frontend unit tests for sidebar state, message submission, history rendering, loading/errors, and automatic board refresh.
+- [x] Add browser integration tests through FastAPI and SQLite with a deterministic fake OpenRouter boundary.
+- [x] Cover chat replies without changes, single and multiple board changes, malformed/provider errors, retry behavior, and page reload behavior.
+- [x] Run a complete Docker end-to-end flow: start, sign in, manually edit the board, ask AI to mutate it, observe automatic refresh, reload, and verify persistence.
+- [x] Run accessibility checks for the login, board, dialogs/forms, and chat controls.
+- [x] Run all lint/type checks, frontend and backend unit suites at at least 80% coverage, integration suites, production build, and Docker smoke tests.
 
 ### Success criteria
 
-- [ ] A signed-in user can converse with the AI in the sidebar.
-- [ ] The AI can create, edit, and move one or more cards through validated structured output.
-- [ ] AI mutations appear automatically in the board and persist after reload/restart.
-- [ ] The complete application runs locally in one Docker container using the platform scripts.
-- [ ] All coverage, integration, accessibility, build, and runtime checks pass.
+- [x] A signed-in user can converse with the AI in the sidebar.
+- [x] The AI can create, edit, and move one or more cards through validated structured output.
+- [x] AI mutations appear automatically in the board and persist after reload/restart.
+- [x] The complete application runs locally in one Docker container using the platform scripts.
+- [x] All coverage, integration, accessibility, build, and runtime checks pass.
 - [ ] The user explicitly approves Part 10 and the completed MVP.

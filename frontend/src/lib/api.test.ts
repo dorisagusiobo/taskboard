@@ -3,6 +3,7 @@ import {
   getBoard,
   logout,
   moveCard,
+  sendAIMessage,
   toBoardData,
 } from "@/lib/api";
 import { cloneBoard } from "@/test/fixtures";
@@ -76,6 +77,29 @@ describe("API client", () => {
 
     await expect(getBoard()).rejects.toEqual(
       new ApiError("Request failed with status 502", 502)
+    );
+  });
+
+  it("sends only the latest twenty chat history messages", async () => {
+    fetchMock.mockResolvedValueOnce(
+      response(200, { reply: "No changes.", board: null })
+    );
+    const history = Array.from({ length: 22 }, (_, index) => ({
+      role: (index % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+      content: `Message ${index}`,
+    }));
+
+    await sendAIMessage("Current request", history);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          message: "Current request",
+          history: history.slice(-20),
+        }),
+      })
     );
   });
 });

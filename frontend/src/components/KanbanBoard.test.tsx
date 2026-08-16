@@ -209,4 +209,36 @@ describe("KanbanBoard", () => {
     resolveCreate(response(201, added));
     expect(await screen.findByText("Only once")).toBeVisible();
   });
+
+  it("opens chat and replaces the board from a successful AI response", async () => {
+    const updated = cloneBoard();
+    updated.columns[1].cards.push({
+      id: 103,
+      title: "Created by AI",
+      details: "Canonical response",
+      position: 0,
+    });
+    fetchMock
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(
+        response(200, { reply: "I created the card.", board: updated })
+      );
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    await user.click(screen.getByRole("button", { name: "Ask AI" }));
+    await user.type(screen.getByLabelText("Message"), "Create the card");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("I created the card.")).toBeVisible();
+    expect(screen.getByText("Created by AI")).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ message: "Create the card", history: [] }),
+      })
+    );
+  });
 });
