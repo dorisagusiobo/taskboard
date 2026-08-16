@@ -12,7 +12,7 @@ export const KanbanCardPreview = ({ card }: KanbanCardPreviewProps) => (
           {card.title}
         </h4>
         <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
-          {card.details}
+          {card.details || "No details yet."}
         </p>
       </div>
     </div>

@@ -3,12 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { LoginForm } from "@/components/LoginForm";
+import { ApiError, getSession, login, logout } from "@/lib/api";
 
 type AuthStatus = "loading" | "anonymous" | "authenticated";
-
-type SessionResponse = {
-  username: string;
-};
 
 export const AuthGate = () => {
   const [status, setStatus] = useState<AuthStatus>("loading");
@@ -18,19 +15,14 @@ export const AuthGate = () => {
 
   const checkSession = useCallback(async () => {
     try {
-      const response = await fetch("/api/auth/me", { credentials: "same-origin" });
-      if (response.status === 401) {
+      const session = await getSession();
+      setUsername(session.username);
+      setStatus("authenticated");
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
         setStatus("anonymous");
         return;
       }
-      if (!response.ok) {
-        throw new Error("Session request failed");
-      }
-
-      const session = (await response.json()) as SessionResponse;
-      setUsername(session.username);
-      setStatus("authenticated");
-    } catch {
       setError("Unable to check your session. Please try signing in.");
       setStatus("anonymous");
     }
@@ -44,25 +36,14 @@ export const AuthGate = () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: loginUsername, password }),
-      });
-
-      if (response.status === 401) {
+      const session = await login(loginUsername, password);
+      setUsername(session.username);
+      setStatus("authenticated");
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
         setError("Invalid username or password.");
         return;
       }
-      if (!response.ok) {
-        throw new Error("Login request failed");
-      }
-
-      const session = (await response.json()) as SessionResponse;
-      setUsername(session.username);
-      setStatus("authenticated");
-    } catch {
       setError("Unable to sign in. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -73,14 +54,7 @@ export const AuthGate = () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-      if (!response.ok) {
-        throw new Error("Logout request failed");
-      }
-
+      await logout();
       setUsername(null);
       setStatus("anonymous");
     } catch {
@@ -89,6 +63,12 @@ export const AuthGate = () => {
       setIsSubmitting(false);
     }
   };
+
+  const handleSessionExpired = useCallback(() => {
+    setUsername(null);
+    setError("Your session ended. Please sign in again.");
+    setStatus("anonymous");
+  }, []);
 
   if (status === "loading") {
     return (
@@ -132,7 +112,7 @@ export const AuthGate = () => {
           {error}
         </p>
       ) : null}
-      <KanbanBoard />
+      <KanbanBoard onSessionExpired={handleSessionExpired} />
     </div>
   );
 };

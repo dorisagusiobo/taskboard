@@ -7,24 +7,24 @@ These instructions apply to work under `frontend/` and supplement the repository
 - The frontend is a Next.js 16 App Router application using React 19 and strict TypeScript.
 - It renders a single client-side Kanban demo at `/`; there are no other frontend routes.
 - Next.js produces a static export that FastAPI serves from the final Docker image. The production image does not run a Next.js server.
-- `src/app/page.tsx` renders `KanbanBoard`, and `src/app/layout.tsx` supplies metadata and Google fonts.
-- `KanbanBoard` owns all board data in local React state. Reloading the page restores the bundled demo data from `src/lib/kanban.ts`.
+- `src/app/page.tsx` renders `AuthGate`, and `src/app/layout.tsx` supplies metadata and Google fonts.
+- After authentication, `KanbanBoard` loads the user's canonical board from FastAPI and replaces local state only with API responses.
 - The board has five fixed columns: Backlog, Discovery, In Progress, Review, and Done.
-- Users can rename columns, add and remove cards, reorder cards, and drag cards between columns.
-- Existing cards cannot currently be edited.
-- Drag and drop uses `@dnd-kit/core` and `@dnd-kit/sortable`; `moveCard` in `src/lib/kanban.ts` contains the ordering logic.
+- Users can rename columns and create, edit, remove, reorder, or move cards. All changes persist in SQLite.
+- Drag and drop uses pointer and keyboard sensors from `@dnd-kit/core` and `@dnd-kit/sortable`; `moveCard` in `src/lib/kanban.ts` calculates the intended destination without updating the UI optimistically.
 - `AuthGate` checks `/api/auth/me` before showing either the login form or board. Login and logout use signed, HTTP-only backend sessions.
-- There is currently no board-data API integration, persistence, or AI chat.
+- AI chat has not been implemented yet.
 
 ## Structure
 
 - `src/app/`: App Router entry points and global styling.
-- `src/components/KanbanBoard.tsx`: top-level board state and board mutations.
+- `src/components/KanbanBoard.tsx`: API-backed board loading, canonical state, errors, and mutation coordination.
 - `src/components/KanbanColumn.tsx`: droppable column, rename input, card list, and add-card form.
-- `src/components/KanbanCard.tsx`: sortable card and remove action.
+- `src/components/KanbanCard.tsx`: sortable card and edit/remove actions.
 - `src/components/KanbanCardPreview.tsx`: drag-overlay presentation.
 - `src/components/NewCardForm.tsx`: local add-card form state and validation.
-- `src/lib/kanban.ts`: board types, initial demo data, ID generation, and pure move/reorder logic.
+- `src/lib/api.ts`: typed authentication and board API client plus response normalization.
+- `src/lib/kanban.ts`: board types and pure move/reorder planning logic.
 - `src/**/*.test.ts(x)`: Vitest unit/component tests.
 - `tests/`: Playwright browser tests.
 

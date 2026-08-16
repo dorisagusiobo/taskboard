@@ -5,7 +5,7 @@ describe("KanbanCardPreview", () => {
   it("renders the dragged card content", () => {
     render(
       <KanbanCardPreview
-        card={{ id: "card-1", title: "Preview title", details: "Preview details" }}
+        card={{ id: 1, title: "Preview title", details: "Preview details" }}
       />
     );
 

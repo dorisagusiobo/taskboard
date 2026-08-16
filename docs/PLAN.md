@@ -185,34 +185,34 @@
 - [x] Data survives application restarts, and missing databases initialize automatically.
 - [x] Invalid or unauthorized mutations cannot corrupt board state.
 - [x] Backend coverage and API/SQLite integration tests pass.
-- [ ] The user explicitly approves Part 6 and authorizes Part 7.
+- [x] The user explicitly approves Part 6 and authorizes Part 7.
 
 ## Part 7: Connect the frontend to the persistent backend
 
 ### Implementation checklist
 
-- [ ] Replace bundled demo state as the source of truth with the authenticated board API.
-- [ ] Add a small typed API client for authentication and board operations.
-- [ ] Load the board after authentication and show minimal accessible loading/error states.
-- [ ] Persist column renames, card creation/editing/deletion, and drag-and-drop moves through the API.
-- [ ] Add the missing card-edit UI required by the business requirements.
-- [ ] Reconcile the UI with the canonical board returned by the backend after mutations.
-- [ ] Prevent duplicate submissions while a mutation is in flight, without adding speculative complexity.
+- [x] Replace bundled demo state as the source of truth with the authenticated board API.
+- [x] Add a small typed API client for authentication and board operations.
+- [x] Load the board after authentication and show minimal accessible loading/error states.
+- [x] Persist column renames, card creation/editing/deletion, and drag-and-drop moves through the API.
+- [x] Add the missing card-edit UI required by the business requirements.
+- [x] Reconcile the UI with the canonical board returned by the backend after mutations.
+- [x] Prevent duplicate submissions while a mutation is in flight, without adding speculative complexity.
 
 ### Test checklist
 
-- [ ] Add frontend unit tests for API-backed loading, mutations, card editing, and error behavior where they materially protect correctness.
-- [ ] Add integration tests covering browser-to-FastAPI-to-SQLite flows for every board mutation.
-- [ ] Verify persistence by changing the board, reloading the page, and restarting the container.
-- [ ] Verify one authenticated user's board data cannot appear in another user's API context.
-- [ ] Run frontend and backend unit suites at at least 80% coverage, plus full browser/API/database integration tests.
+- [x] Add frontend unit tests for API-backed loading, mutations, card editing, and error behavior where they materially protect correctness.
+- [x] Add integration tests covering browser-to-FastAPI-to-SQLite flows for every board mutation.
+- [x] Verify persistence by changing the board, reloading the page, and restarting the container.
+- [x] Verify one authenticated user's board data cannot appear in another user's API context.
+- [x] Run frontend and backend unit suites at at least 80% coverage, plus full browser/API/database integration tests.
 
 ### Success criteria
 
-- [ ] The browser displays only persisted API data rather than hardcoded runtime state.
-- [ ] Every required manual board operation persists across reloads and container restarts.
-- [ ] Loading and failure states are understandable and do not silently lose changes.
-- [ ] Coverage thresholds and end-to-end persistence tests pass.
+- [x] The browser displays only persisted API data rather than hardcoded runtime state.
+- [x] Every required manual board operation persists across reloads and container restarts.
+- [x] Loading and failure states are understandable and do not silently lose changes.
+- [x] Coverage thresholds and end-to-end persistence tests pass.
 - [ ] The user explicitly approves Part 7 and authorizes Part 8.
 
 ## Part 8: OpenRouter connectivity

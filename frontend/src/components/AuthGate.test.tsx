@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthGate } from "@/components/AuthGate";
+import { cloneBoard } from "@/test/fixtures";
 
 const response = (status: number, body?: unknown) =>
   ({
@@ -36,7 +37,9 @@ describe("AuthGate", () => {
   });
 
   it("restores an active session", async () => {
-    fetchMock.mockResolvedValueOnce(response(200, { username: "user" }));
+    fetchMock
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
 
     render(<AuthGate />);
 
@@ -64,7 +67,8 @@ describe("AuthGate", () => {
   it("signs in with valid credentials", async () => {
     fetchMock
       .mockResolvedValueOnce(response(401))
-      .mockResolvedValueOnce(response(200, { username: "user" }));
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
     render(<AuthGate />);
 
     await userEvent.type(await screen.findByLabelText("Username"), "user");
@@ -74,7 +78,7 @@ describe("AuthGate", () => {
     expect(
       await screen.findByRole("heading", { name: "Kanban Studio" })
     ).toBeVisible();
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/login",
       expect.objectContaining({
         method: "POST",
@@ -86,6 +90,7 @@ describe("AuthGate", () => {
   it("signs out and restores the login form", async () => {
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(204));
     render(<AuthGate />);
 
@@ -113,6 +118,7 @@ describe("AuthGate", () => {
     unmount();
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(500));
     render(<AuthGate />);
 
@@ -126,5 +132,18 @@ describe("AuthGate", () => {
     expect(
       screen.getByRole("heading", { name: "Kanban Studio" })
     ).toBeVisible();
+  });
+
+  it("returns to sign in when the board session has expired", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(401, { detail: "Not authenticated" }));
+
+    render(<AuthGate />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Sign in" })
+    ).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent("session ended");
   });
 });

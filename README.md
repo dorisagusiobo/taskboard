@@ -35,9 +35,12 @@ To stop the container:
 cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy main.py database.py && uv run pytest -q
 cd frontend && npm run lint && npm run test:unit && npm run build
 ./scripts/smoke-test-docker.sh
+./scripts/test-e2e-docker.sh
 ```
 
-With the application running, execute the browser integration suite against the FastAPI-served export:
+`test-e2e-docker.sh` uses an isolated temporary Docker volume, exercises every board mutation through the browser, restarts the container, verifies persistence, and removes its test container and volume.
+
+With the application already running, execute the browser suite directly against the FastAPI-served export:
 
 ```bash
 cd frontend

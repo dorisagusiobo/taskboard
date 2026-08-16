@@ -1,85 +1,212 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import type { ApiBoard } from "@/lib/api";
+import { cloneBoard } from "@/test/fixtures";
 
-const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
+const response = (status: number, body?: unknown) =>
+  ({
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+  }) as Response;
 
 describe("KanbanBoard", () => {
-  it("renders five columns", () => {
-    render(<KanbanBoard />);
+  const fetchMock = vi.fn();
+  const onSessionExpired = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  const renderBoard = () =>
+    render(<KanbanBoard onSessionExpired={onSessionExpired} />);
+
+  it("loads the canonical board from the API", async () => {
+    fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
+
+    renderBoard();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading board");
+    expect(await screen.findByText("Server card")).toBeVisible();
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
+    expect(screen.getByDisplayValue("Server backlog")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith("/api/board", {
+      credentials: "same-origin",
+    });
   });
 
-  it("renames a column", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
+  it("renames a column with the canonical API response", async () => {
+    const renamed = cloneBoard();
+    renamed.columns[0].title = "Persistent ideas";
+    fetchMock
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(200, renamed));
+    const user = userEvent.setup();
+    renderBoard();
+
+    const column = await screen.findByTestId("column-10");
     const input = within(column).getByLabelText("Column title");
-    await userEvent.clear(input);
-    await userEvent.type(input, "New Name");
-    expect(input).toHaveValue("New Name");
+    await user.clear(input);
+    await user.type(input, "Persistent ideas");
+    await user.click(within(column).getByLabelText("Save column title"));
+
+    expect(await screen.findByDisplayValue("Persistent ideas")).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/board/columns/10",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ title: "Persistent ideas" }),
+      })
+    );
   });
 
-  it("adds and removes a card", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
-    const addButton = within(column).getByRole("button", {
-      name: /add a card/i,
+  it("creates, edits, and deletes a card through the API", async () => {
+    const added = cloneBoard();
+    added.columns[0].cards.push({
+      id: 103,
+      title: "New card",
+      details: "Notes",
+      position: 2,
     });
-    await userEvent.click(addButton);
+    const edited = structuredClone(added);
+    edited.columns[0].cards[2] = {
+      ...edited.columns[0].cards[2],
+      title: "Edited card",
+      details: "Updated notes",
+    };
+    const deleted = cloneBoard();
+    fetchMock
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(201, added))
+      .mockResolvedValueOnce(response(200, edited))
+      .mockResolvedValueOnce(response(200, deleted));
+    const user = userEvent.setup();
+    renderBoard();
 
-    const titleInput = within(column).getByPlaceholderText(/card title/i);
-    await userEvent.type(titleInput, "New card");
-    const detailsInput = within(column).getByPlaceholderText(/details/i);
-    await userEvent.type(detailsInput, "Notes");
+    const column = await screen.findByTestId("column-10");
+    await user.click(within(column).getByRole("button", { name: /add a card/i }));
+    await user.type(within(column).getByLabelText("New card title"), "New card");
+    await user.type(within(column).getByLabelText("New card details"), "Notes");
+    await user.click(within(column).getByRole("button", { name: "Add card" }));
 
-    await userEvent.click(within(column).getByRole("button", { name: /add card/i }));
+    const createdCard = await screen.findByTestId("card-103");
+    await user.click(within(createdCard).getByLabelText("Edit New card"));
+    const title = within(createdCard).getByLabelText("Card title");
+    const details = within(createdCard).getByLabelText("Card details");
+    await user.clear(title);
+    await user.type(title, "Edited card");
+    await user.clear(details);
+    await user.type(details, "Updated notes");
+    await user.click(within(createdCard).getByRole("button", { name: "Save card" }));
 
-    expect(within(column).getByText("New card")).toBeInTheDocument();
+    const editedCard = await screen.findByTestId("card-103");
+    expect(within(editedCard).getByText("Updated notes")).toBeVisible();
+    await user.click(within(editedCard).getByLabelText("Delete Edited card"));
 
-    const deleteButton = within(column).getByRole("button", {
-      name: /delete new card/i,
+    expect(await screen.findByText("Server card")).toBeVisible();
+    expect(screen.queryByTestId("card-103")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/board/cards/103",
+      expect.objectContaining({ method: "DELETE" })
+    );
+  });
+
+  it("keeps an empty-details card readable", async () => {
+    const added = cloneBoard();
+    added.columns[0].cards.push({
+      id: 103,
+      title: "No notes",
+      details: "",
+      position: 2,
     });
-    await userEvent.click(deleteButton);
+    fetchMock
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(201, added));
+    const user = userEvent.setup();
+    renderBoard();
 
-    expect(within(column).queryByText("New card")).not.toBeInTheDocument();
+    const column = await screen.findByTestId("column-10");
+    await user.click(within(column).getByRole("button", { name: /add a card/i }));
+    await user.type(within(column).getByLabelText("New card title"), "No notes");
+    await user.click(within(column).getByRole("button", { name: "Add card" }));
+
+    expect(await screen.findByText("No details yet.")).toBeVisible();
   });
 
-  it("uses default details when a card is added without notes", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
+  it("retains draft input and the confirmed board when a mutation fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(500, { detail: "Database unavailable" }));
+    const user = userEvent.setup();
+    renderBoard();
 
-    await userEvent.click(
-      within(column).getByRole("button", { name: /add a card/i })
-    );
-    await userEvent.type(
-      within(column).getByPlaceholderText(/card title/i),
-      "No notes"
-    );
-    await userEvent.click(
-      within(column).getByRole("button", { name: /add card/i })
-    );
+    const column = await screen.findByTestId("column-10");
+    const input = within(column).getByLabelText("Column title");
+    await user.clear(input);
+    await user.type(input, "Unsaved title");
+    await user.click(within(column).getByLabelText("Save column title"));
 
-    expect(within(column).getByText("No details yet.")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "last confirmed board is unchanged"
+    );
+    expect(input).toHaveValue("Unsaved title");
+    expect(screen.getByText("Server backlog")).toBeVisible();
   });
 
-  it("clears a draft when adding a card is cancelled", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
+  it("shows load errors, retries, and handles an expired session", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
+    const user = userEvent.setup();
+    const { unmount } = renderBoard();
 
-    await userEvent.click(
-      within(column).getByRole("button", { name: /add a card/i })
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load your board"
     );
-    await userEvent.type(
-      within(column).getByPlaceholderText(/card title/i),
-      "Discard me"
-    );
-    await userEvent.click(
-      within(column).getByRole("button", { name: /cancel/i })
-    );
-    await userEvent.click(
-      within(column).getByRole("button", { name: /add a card/i })
-    );
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Server card")).toBeVisible();
 
-    expect(within(column).getByPlaceholderText(/card title/i)).toHaveValue("");
+    unmount();
+    fetchMock.mockResolvedValueOnce(response(401, { detail: "Not authenticated" }));
+    renderBoard();
+    await vi.waitFor(() => expect(onSessionExpired).toHaveBeenCalledOnce());
+  });
+
+  it("blocks duplicate submissions while a mutation is pending", async () => {
+    let resolveCreate: (value: Response) => void = () => undefined;
+    const pendingCreate = new Promise<Response>((resolve) => {
+      resolveCreate = resolve;
+    });
+    const added: ApiBoard = cloneBoard();
+    added.columns[0].cards.push({
+      id: 103,
+      title: "Only once",
+      details: "",
+      position: 2,
+    });
+    fetchMock
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockReturnValueOnce(pendingCreate);
+    const user = userEvent.setup();
+    renderBoard();
+
+    const column = await screen.findByTestId("column-10");
+    await user.click(within(column).getByRole("button", { name: /add a card/i }));
+    await user.type(within(column).getByLabelText("New card title"), "Only once");
+    await user.click(within(column).getByRole("button", { name: "Add card" }));
+
+    const pendingButton = within(column).getByRole("button", { name: "Adding..." });
+    expect(pendingButton).toBeDisabled();
+    await user.click(pendingButton);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    resolveCreate(response(201, added));
+    expect(await screen.findByText("Only once")).toBeVisible();
   });
 });

@@ -1,26 +1,59 @@
+import { useState, type FormEvent } from "react";
 import clsx from "clsx";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import type { Card, Column } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
+import type { Card, Column } from "@/lib/kanban";
 
 type KanbanColumnProps = {
   column: Column;
   cards: Card[];
-  onRename: (columnId: string, title: string) => void;
-  onAddCard: (columnId: string, title: string, details: string) => void;
-  onDeleteCard: (columnId: string, cardId: string) => void;
+  isDisabled: boolean;
+  onRename: (columnId: number, title: string) => Promise<boolean>;
+  onAddCard: (
+    columnId: number,
+    title: string,
+    details: string
+  ) => Promise<boolean>;
+  onEditCard: (
+    cardId: number,
+    title: string,
+    details: string
+  ) => Promise<boolean>;
+  onDeleteCard: (cardId: number) => Promise<boolean>;
 };
 
 export const KanbanColumn = ({
   column,
   cards,
+  isDisabled,
   onRename,
   onAddCard,
+  onEditCard,
   onDeleteCard,
 }: KanbanColumnProps) => {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const [title, setTitle] = useState(column.title);
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+    disabled: isDisabled,
+  });
+
+  const handleRename = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextTitle = title.trim();
+    if (!nextTitle || nextTitle === column.title) {
+      setTitle(column.title);
+      return;
+    }
+
+    setIsSavingTitle(true);
+    await onRename(column.id, nextTitle);
+    setIsSavingTitle(false);
+  };
+
+  const isBusy = isDisabled || isSavingTitle;
 
   return (
     <section
@@ -39,21 +72,35 @@ export const KanbanColumn = ({
               {cards.length} cards
             </span>
           </div>
-          <input
-            value={column.title}
-            onChange={(event) => onRename(column.id, event.target.value)}
-            className="mt-3 w-full bg-transparent font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
-            aria-label="Column title"
-          />
+          <form onSubmit={handleRename} className="mt-3 flex items-center gap-2">
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              disabled={isBusy}
+              maxLength={100}
+              className="min-w-0 flex-1 bg-transparent font-display text-lg font-semibold text-[var(--navy-dark)] outline-none disabled:opacity-60"
+              aria-label="Column title"
+            />
+            <button
+              type="submit"
+              disabled={isBusy || title.trim() === column.title}
+              className="rounded-full border border-[var(--stroke)] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--primary-blue)] transition hover:border-[var(--primary-blue)] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Save column title"
+            >
+              {isSavingTitle ? "Saving..." : "Save"}
+            </button>
+          </form>
         </div>
       </div>
       <div className="mt-4 flex flex-1 flex-col gap-3">
         <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
           {cards.map((card) => (
             <KanbanCard
-              key={card.id}
+              key={`${card.id}:${card.title}:${card.details}`}
               card={card}
-              onDelete={(cardId) => onDeleteCard(column.id, cardId)}
+              isDisabled={isDisabled}
+              onEdit={onEditCard}
+              onDelete={onDeleteCard}
             />
           ))}
         </SortableContext>
@@ -64,6 +111,7 @@ export const KanbanColumn = ({
         )}
       </div>
       <NewCardForm
+        isDisabled={isDisabled}
         onAdd={(title, details) => onAddCard(column.id, title, details)}
       />
     </section>
