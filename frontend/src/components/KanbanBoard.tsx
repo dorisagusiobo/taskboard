@@ -16,6 +16,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { AIChatSidebar } from "@/components/AIChatSidebar";
+import { ChatIcon } from "@/components/icons";
 import {
   ApiError,
   createCard,
@@ -195,7 +196,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
       <div className="pointer-events-none absolute left-0 top-0 h-[420px] w-[420px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.25)_0%,_rgba(32,157,215,0.05)_55%,_transparent_70%)]" />
       <div className="pointer-events-none absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(117,57,145,0.18)_0%,_rgba(117,57,145,0.05)_55%,_transparent_75%)]" />
 
-      <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-6 px-6 pb-16 pt-12">
+      <main className="relative mx-auto flex min-h-screen max-w-[1800px] flex-col gap-6 px-6 pb-16 pt-12">
         {error ? (
           <p
             className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-700"
@@ -232,20 +233,24 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
                 ref={chatTriggerRef}
                 type="button"
                 onClick={() => setIsChatOpen(true)}
-                className="rounded-full bg-[var(--secondary-purple)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-sm transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[var(--secondary-purple)] focus:ring-offset-2"
+                className="flex items-center gap-2 rounded-full bg-[var(--secondary-purple)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-sm transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[var(--secondary-purple)] focus:ring-offset-2"
               >
+                <ChatIcon />
                 Ask AI
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {board.columns.map((column) => (
               <div
                 key={column.id}
                 className="flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--navy-dark)]"
               >
-                <span className="h-2 w-2 rounded-full bg-[var(--accent-yellow)]" />
-                {column.title}
+                <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--accent-yellow)]" />
+                <span className="truncate">{column.title}</span>
+                <span className="ml-auto shrink-0 text-[var(--gray-text)]">
+                  {column.cardIds.length}
+                </span>
               </div>
             ))}
           </div>
@@ -257,7 +262,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <section className="grid gap-6 lg:grid-cols-5">
+          <section className="flex gap-4 overflow-x-auto pb-2">
             {board.columns.map((column) => (
               <KanbanColumn
                 key={`${column.id}:${column.title}`}

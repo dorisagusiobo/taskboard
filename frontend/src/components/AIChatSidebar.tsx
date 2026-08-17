@@ -7,6 +7,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { CloseIcon } from "@/components/icons";
 import type { ChatMessage } from "@/lib/api";
 
 type AIChatSidebarProps = {
@@ -148,8 +149,9 @@ export const AIChatSidebar = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:border-[var(--primary-blue)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-blue)]"
+              className="flex items-center gap-2 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:border-[var(--primary-blue)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-blue)]"
             >
+              <CloseIcon />
               Close
             </button>
           </div>

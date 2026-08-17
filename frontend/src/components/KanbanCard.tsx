@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
+import { GripIcon, PencilIcon, SpinnerIcon, TrashIcon } from "@/components/icons";
 import type { Card } from "@/lib/kanban";
 
 type KanbanCardProps = {
@@ -129,36 +130,45 @@ export const KanbanCard = ({
               {card.details || "No details yet."}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex items-center justify-between">
             <button
               ref={setActivatorNodeRef}
               type="button"
               disabled={isBusy}
-              className="cursor-grab rounded-full border border-[var(--stroke)] px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:text-[var(--navy-dark)] active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex cursor-grab items-center justify-center rounded-full border border-transparent p-1.5 text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)] active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={`Drag ${card.title}`}
+              title="Drag to move"
               {...attributes}
               {...listeners}
             >
-              Drag
+              <GripIcon />
             </button>
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => setIsEditing(true)}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)] disabled:opacity-50"
-              aria-label={`Edit ${card.title}`}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => void handleDelete()}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)] disabled:opacity-50"
-              aria-label={`Delete ${card.title}`}
-            >
-              {isDeleting ? "Removing..." : "Remove"}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => setIsEditing(true)}
+                className="flex items-center justify-center rounded-full border border-transparent p-1.5 text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--primary-blue)] disabled:opacity-50"
+                aria-label={`Edit ${card.title}`}
+                title="Edit card"
+              >
+                <PencilIcon />
+              </button>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => void handleDelete()}
+                className="flex items-center justify-center rounded-full border border-transparent p-1.5 text-[var(--gray-text)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                aria-label={`Delete ${card.title}`}
+                title="Delete card"
+              >
+                {isDeleting ? (
+                  <SpinnerIcon />
+                ) : (
+                  <TrashIcon />
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

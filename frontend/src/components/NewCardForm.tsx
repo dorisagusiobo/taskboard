@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { PlusIcon } from "@/components/icons";
 
 const initialFormState = { title: "", details: "" };
 
@@ -86,8 +87,9 @@ export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
           type="button"
           disabled={isDisabled}
           onClick={() => setIsOpen(true)}
-          className="w-full rounded-full border border-dashed border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--primary-blue)] transition hover:border-[var(--primary-blue)]"
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-dashed border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--primary-blue)] transition hover:border-[var(--primary-blue)]"
         >
+          <PlusIcon />
           Add a card
         </button>
       )}
