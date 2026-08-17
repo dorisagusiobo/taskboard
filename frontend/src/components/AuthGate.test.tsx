@@ -251,6 +251,62 @@ describe("AuthGate", () => {
     expect(screen.getByLabelText("Current password")).toBeVisible();
   });
 
+  it("deletes the account and returns to sign in on success", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(204));
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete account" })
+    );
+    await user.type(
+      screen.getByLabelText("Confirm password to delete account"),
+      "password"
+    );
+    await user.click(screen.getByRole("button", { name: "Delete my account" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/auth/delete-account",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ password: "password" }),
+      })
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Sign in" })
+    ).toBeVisible();
+  });
+
+  it("shows an error and keeps the form open when the delete-account password is wrong", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(400, { detail: "Password is incorrect" }));
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete account" })
+    );
+    await user.type(
+      screen.getByLabelText("Confirm password to delete account"),
+      "wrong"
+    );
+    await user.click(screen.getByRole("button", { name: "Delete my account" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Password is incorrect"
+    );
+    expect(
+      screen.getByRole("heading", { name: "Kanban Studio" })
+    ).toBeVisible();
+  });
+
   it("returns to sign in when the board session has expired", async () => {
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))

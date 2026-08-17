@@ -80,6 +80,8 @@ CREATE INDEX idx_cards_board_id ON cards(board_id);
 
 `POST /api/auth/password` (`BoardStore.change_password`) lets an authenticated user change their own password: it re-verifies `current_password` against the stored hash inside the same transaction that writes the new one (closing the check-then-update race, however unlikely in a single-instance local app), and raises `IncorrectPasswordError` (mapped to HTTP 400, not 401, so it isn't mistaken for a session-expiry by the frontend's global 401-means-log-out handling) if it doesn't match. There is no password-reset flow (no email delivery mechanism exists in this local-first app) — losing a password means losing the account.
 
+`POST /api/auth/delete-account` (`BoardStore.delete_account`) lets a user delete their own account after re-confirming their password (same `IncorrectPasswordError`/400 pattern as `change_password`). It's a plain `DELETE FROM users WHERE username = ?`; `ON DELETE CASCADE` on `boards.user_id` (and transitively `board_columns.board_id`, `cards.column_id`/`board_id`) removes every board, column, and card the user owned in the same transaction — there's no separate cleanup step, and `PRAGMA foreign_keys = ON` (set on every connection in `_connect`) is what makes the cascade actually fire. The session is cleared server-side after a successful delete. This is irreversible and there is no confirmation step at the database layer — the frontend's `DeleteAccountForm` is the only safeguard (a warning message plus a required password re-entry).
+
 Timestamps, roles, soft deletes, and chat tables are omitted because no current behavior needs them.
 
 ## Card due dates

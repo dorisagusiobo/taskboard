@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
+import { DeleteAccountForm } from "@/components/DeleteAccountForm";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { LoginForm } from "@/components/LoginForm";
 import {
   ApiError,
   changePassword,
+  deleteAccount,
   getSession,
   login,
   logout,
@@ -121,6 +123,26 @@ export const AuthGate = () => {
     }
   };
 
+  const handleDeleteAccount = async (password: string): Promise<boolean> => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await deleteAccount(password);
+      setUsername(null);
+      setStatus("anonymous");
+      return true;
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 400) {
+        setError("Password is incorrect.");
+        return false;
+      }
+      setError("Unable to delete your account. Please try again.");
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSessionExpired = useCallback(() => {
     setUsername(null);
     setError("Your session ended. Please sign in again.");
@@ -164,10 +186,16 @@ export const AuthGate = () => {
             {isSubmitting ? "Signing out..." : "Sign out"}
           </button>
         </div>
-        <ChangePasswordForm
-          isSubmitting={isSubmitting}
-          onSubmit={handleChangePassword}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ChangePasswordForm
+            isSubmitting={isSubmitting}
+            onSubmit={handleChangePassword}
+          />
+          <DeleteAccountForm
+            isSubmitting={isSubmitting}
+            onSubmit={handleDeleteAccount}
+          />
+        </div>
       </div>
       {error ? (
         <p className="mx-auto mt-4 max-w-xl text-center text-sm text-red-700" role="alert">

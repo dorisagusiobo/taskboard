@@ -13,7 +13,7 @@ From the project root, use the platform script for your OS:
 The app is served at http://localhost:8000.
 The start script returns only after the container reports a healthy API, or prints the container logs and exits with an error.
 
-A zero-config account (username `user`, password `password`) is created automatically the first time the app starts with an empty database, so you can sign in right away. Use "Need an account? Create one" on the sign-in screen to register additional accounts (username 3+ characters, password 8+ characters) — each account gets its own private boards. Use "Change password" next to "Sign out" to change your password once signed in. There is no password-reset flow, so keep your password somewhere safe.
+A zero-config account (username `user`, password `password`) is created automatically the first time the app starts with an empty database, so you can sign in right away. Use "Need an account? Create one" on the sign-in screen to register additional accounts (username 3+ characters, password 8+ characters) — each account gets its own private boards. Use "Change password" next to "Sign out" to change your password once signed in. There is no password-reset flow, so keep your password somewhere safe. "Delete account" permanently deletes your account and every board you own after you re-enter your password to confirm — this cannot be undone.
 
 Each account can hold any number of boards. Use the board switcher at the top of the page to create, rename, switch between, or delete boards (you always keep at least one). Every board has the same five fixed columns (Backlog, Discovery, In Progress, Review, Done); only the first board created for a new account starts with sample cards.
 

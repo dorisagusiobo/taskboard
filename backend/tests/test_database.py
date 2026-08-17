@@ -73,6 +73,67 @@ def test_change_password_for_an_unknown_user_raises_incorrect_password(
         store.change_password("missing", "anything", "new-password")
 
 
+def test_delete_account_rejects_a_wrong_password_and_keeps_everything(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("user", "password")
+    board_id = first_board_id(store, "user")
+
+    with pytest.raises(IncorrectPasswordError):
+        store.delete_account("user", "wrong-password")
+
+    assert store.verify_password("user", "password") is True
+    assert store.get_board("user", board_id) is not None
+
+
+def test_delete_account_removes_the_user_and_cascades_to_their_boards(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("user", "password")
+    store.register_user("other", "password")
+    user_board_id = first_board_id(store, "user")
+    other_board_id = first_board_id(store, "other")
+
+    store.delete_account("user", "password")
+
+    assert store.verify_password("user", "password") is False
+    assert store.list_boards("user") == []
+    with pytest.raises(BoardNotFoundError):
+        store.get_board("user", user_board_id)
+
+    connection = sqlite3.connect(database_path)
+    try:
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM users WHERE username = 'user'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM boards WHERE id = ?", (user_board_id,)
+            ).fetchone()[0]
+            == 0
+        )
+    finally:
+        connection.close()
+
+    assert store.verify_password("other", "password") is True
+    assert store.get_board("other", other_board_id)["name"] == "Board"
+
+
+def test_delete_account_for_an_unknown_user_raises_incorrect_password(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("user", "password")
+
+    with pytest.raises(IncorrectPasswordError):
+        store.delete_account("missing", "anything")
+
+
 def test_registering_an_existing_username_is_rejected_and_preserves_data(
     database_path: Path,
 ):

@@ -260,6 +260,27 @@ class BoardStore:
         finally:
             connection.close()
 
+    def delete_account(self, username: str, password: str) -> None:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT password_hash FROM users WHERE username = ?", (username,)
+            ).fetchone()
+            if (
+                row is None
+                or not row["password_hash"]
+                or not check_password(password, row["password_hash"])
+            ):
+                raise IncorrectPasswordError
+            connection.execute("DELETE FROM users WHERE username = ?", (username,))
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
     def list_boards(self, username: str) -> list[dict[str, Any]]:
         connection = self._connect()
         try:

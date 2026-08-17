@@ -103,6 +103,12 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
     })
   );
 
+export const deleteAccount = (password: string) =>
+  request<void>(
+    "/api/auth/delete-account",
+    jsonOptions("POST", { password })
+  );
+
 export const listBoards = () => request<BoardSummary[]>("/api/boards");
 
 export const createBoard = (name: string) =>

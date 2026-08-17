@@ -228,3 +228,44 @@ def test_change_password_rejects_a_new_password_that_is_too_short(client):
     )
 
     assert response.status_code == 422
+
+
+def test_delete_account_requires_authentication(client):
+    response = client.post("/api/auth/delete-account", json={"password": "password"})
+
+    assert response.status_code == 401
+
+
+def test_delete_account_rejects_an_incorrect_password_and_keeps_the_account(client):
+    client.post("/api/auth/login", json={"username": "user", "password": "password"})
+
+    response = client.post(
+        "/api/auth/delete-account", json={"password": "wrong-password"}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Password is incorrect"}
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_delete_account_removes_the_account_boards_and_session(client):
+    client.post("/api/auth/login", json={"username": "user", "password": "password"})
+    board_id = client.get("/api/boards").json()[0]["id"]
+
+    response = client.post("/api/auth/delete-account", json={"password": "password"})
+
+    assert response.status_code == 204
+    assert "expires=thu, 01 jan 1970" in response.headers["set-cookie"].lower()
+    assert client.get("/api/auth/me").status_code == 401
+
+    login_again = client.post(
+        "/api/auth/login", json={"username": "user", "password": "password"}
+    )
+    assert login_again.status_code == 401
+
+    register_again = client.post(
+        "/api/auth/register", json={"username": "user", "password": "brand-new-pass"}
+    )
+    assert register_again.status_code == 201
+    new_boards = client.get("/api/boards").json()
+    assert [board["id"] for board in new_boards] != [board_id]
