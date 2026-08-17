@@ -410,13 +410,15 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
                 onRename={(columnId, title) =>
                   applyMutation(() => renameColumn(board.id, columnId, title))
                 }
-                onAddCard={(columnId, title, details) =>
+                onAddCard={(columnId, title, details, dueDate) =>
                   applyMutation(() =>
-                    createCard(board.id, columnId, title, details)
+                    createCard(board.id, columnId, title, details, dueDate)
                   )
                 }
-                onEditCard={(cardId, title, details) =>
-                  applyMutation(() => updateCard(board.id, cardId, title, details))
+                onEditCard={(cardId, title, details, dueDate) =>
+                  applyMutation(() =>
+                    updateCard(board.id, cardId, title, details, dueDate)
+                  )
                 }
                 onDeleteCard={(cardId) =>
                   applyMutation(() => deleteCard(board.id, cardId))

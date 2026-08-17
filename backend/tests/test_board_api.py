@@ -152,6 +152,57 @@ def test_create_edit_and_delete_card(authenticated_client: TestClient, board_id:
         find_card(deleted_board, "Renamed card")
 
 
+def test_card_due_date_can_be_set_updated_and_cleared(
+    authenticated_client: TestClient, board_id: int
+):
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
+    column_id = board["columns"][0]["id"]
+
+    created_response = authenticated_client.post(
+        f"/api/boards/{board_id}/cards",
+        json={
+            "column_id": column_id,
+            "title": "Due date card",
+            "due_date": "2026-03-01",
+        },
+    )
+    assert created_response.status_code == 201
+    _, created = find_card(created_response.json(), "Due date card")
+    assert created["due_date"] == "2026-03-01"
+
+    updated_response = authenticated_client.patch(
+        f"/api/boards/{board_id}/cards/{created['id']}",
+        json={"due_date": "2026-04-15"},
+    )
+    assert updated_response.status_code == 200
+    _, updated = find_card(updated_response.json(), "Due date card")
+    assert updated["due_date"] == "2026-04-15"
+
+    cleared_response = authenticated_client.patch(
+        f"/api/boards/{board_id}/cards/{created['id']}", json={"due_date": ""}
+    )
+    assert cleared_response.status_code == 200
+    _, cleared = find_card(cleared_response.json(), "Due date card")
+    assert cleared["due_date"] == ""
+
+
+@pytest.mark.parametrize(
+    "due_date", ["not-a-date", "2026-13-40", "01-01-2026", "2026/01/01"]
+)
+def test_card_due_date_rejects_invalid_formats(
+    authenticated_client: TestClient, board_id: int, due_date: str
+):
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
+    column_id = board["columns"][0]["id"]
+
+    response = authenticated_client.post(
+        f"/api/boards/{board_id}/cards",
+        json={"column_id": column_id, "title": "Bad date", "due_date": due_date},
+    )
+
+    assert response.status_code == 422
+
+
 def test_reorders_and_moves_cards_transactionally(
     authenticated_client: TestClient, database_path: Path, board_id: int
 ):

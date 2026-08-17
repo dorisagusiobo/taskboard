@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS cards (
     column_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT '',
+    due_date TEXT NOT NULL DEFAULT '',
     position INTEGER NOT NULL,
     UNIQUE (column_id, position),
     CHECK (length(trim(title)) > 0),
@@ -150,12 +151,19 @@ class BoardStore:
     def _ensure_schema(self, connection: sqlite3.Connection) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         connection.executescript(SCHEMA_SQL)
-        columns = {
+        user_columns = {
             row["name"] for row in connection.execute("PRAGMA table_info(users)")
         }
-        if "password_hash" not in columns:
+        if "password_hash" not in user_columns:
             connection.execute(
                 "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"
+            )
+        card_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(cards)")
+        }
+        if "due_date" not in card_columns:
+            connection.execute(
+                "ALTER TABLE cards ADD COLUMN due_date TEXT NOT NULL DEFAULT ''"
             )
 
     def init_schema(self) -> None:
@@ -319,12 +327,15 @@ class BoardStore:
         column_id: int,
         title: str,
         details: str,
+        due_date: str = "",
     ) -> dict[str, Any]:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
             owned_board_id = self._owned_board_id(connection, username, board_id)
-            self._create_card(connection, owned_board_id, column_id, title, details)
+            self._create_card(
+                connection, owned_board_id, column_id, title, details, due_date
+            )
             connection.commit()
             return self._load_board(connection, username, owned_board_id)
         except Exception:
@@ -341,6 +352,7 @@ class BoardStore:
         *,
         title: str | None,
         details: str | None,
+        due_date: str | None = None,
     ) -> dict[str, Any]:
         connection = self._connect()
         try:
@@ -352,6 +364,7 @@ class BoardStore:
                 card_id,
                 title=title,
                 details=details,
+                due_date=due_date,
             )
             connection.commit()
             return self._load_board(connection, username, owned_board_id)
@@ -430,6 +443,7 @@ class BoardStore:
                             operation["column_id"],
                             operation["title"],
                             operation["details"],
+                            operation.get("due_date", ""),
                         )
                     case "edit_card":
                         self._update_card(
@@ -438,6 +452,7 @@ class BoardStore:
                             operation["card_id"],
                             title=operation["title"],
                             details=operation["details"],
+                            due_date=operation.get("due_date"),
                         )
                     case "move_card":
                         self._move_card(
@@ -519,6 +534,7 @@ class BoardStore:
         column_id: int,
         title: str,
         details: str,
+        due_date: str = "",
     ) -> None:
         cls._require_column(connection, board_id, column_id)
         position = connection.execute(
@@ -531,10 +547,10 @@ class BoardStore:
         ).fetchone()[0]
         connection.execute(
             """
-            INSERT INTO cards (board_id, column_id, title, details, position)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO cards (board_id, column_id, title, details, due_date, position)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (board_id, column_id, title, details, position),
+            (board_id, column_id, title, details, due_date, position),
         )
 
     @classmethod
@@ -546,9 +562,10 @@ class BoardStore:
         *,
         title: str | None,
         details: str | None,
+        due_date: str | None = None,
     ) -> None:
-        if title is None and details is None:
-            raise ValueError("An update must change the title or details")
+        if title is None and details is None and due_date is None:
+            raise ValueError("An update must change the title, details, or due date")
         cls._require_card(connection, board_id, card_id)
         assignments: list[str] = []
         values: list[str | int] = []
@@ -558,6 +575,9 @@ class BoardStore:
         if details is not None:
             assignments.append("details = ?")
             values.append(details)
+        if due_date is not None:
+            assignments.append("due_date = ?")
+            values.append(due_date)
         values.extend((card_id, board_id))
         connection.execute(
             f"UPDATE cards SET {', '.join(assignments)} WHERE id = ? AND board_id = ?",
@@ -752,7 +772,7 @@ class BoardStore:
         columns_by_id = {column["id"]: column for column in columns}
         for row in connection.execute(
             """
-            SELECT id, column_id, title, details, position
+            SELECT id, column_id, title, details, due_date, position
             FROM cards
             WHERE board_id = ?
             ORDER BY column_id, position, id
@@ -764,6 +784,7 @@ class BoardStore:
                     "id": row["id"],
                     "title": row["title"],
                     "details": row["details"],
+                    "due_date": row["due_date"],
                     "position": row["position"],
                 }
             )

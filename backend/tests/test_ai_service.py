@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 import pytest
 from pydantic import ValidationError
@@ -51,6 +52,14 @@ def test_build_messages_includes_canonical_board_history_and_current_message():
     ]
 
 
+def test_build_messages_tells_the_model_todays_date_for_relative_due_dates():
+    messages = build_messages(
+        {"id": 1, "columns": []}, "Due tomorrow", [], today=date(2026, 3, 10)
+    )
+
+    assert "Today's date is 2026-03-10" in messages[0]["content"]
+
+
 def test_service_requests_schema_and_parses_all_supported_operations():
     raw_response = json.dumps(
         {
@@ -61,12 +70,14 @@ def test_service_requests_schema_and_parses_all_supported_operations():
                     "column_id": 1,
                     "title": "New card",
                     "details": "Details",
+                    "due_date": "2026-05-01",
                 },
                 {
                     "type": "edit_card",
                     "card_id": 2,
                     "title": None,
                     "details": "Changed",
+                    "due_date": None,
                 },
                 {
                     "type": "move_card",
@@ -122,6 +133,7 @@ def test_service_parses_a_no_change_reply():
                         "card_id": 1,
                         "title": None,
                         "details": None,
+                        "due_date": None,
                     }
                 ],
             }
@@ -134,6 +146,51 @@ def test_service_rejects_malformed_or_unsupported_output(response: str):
         AIService(FakeStructuredClient(response)).respond(
             {"id": 1, "columns": []}, "Request", []
         )
+
+
+def test_service_rejects_an_operation_with_an_invalid_due_date():
+    raw_response = json.dumps(
+        {
+            "reply": "Bad date",
+            "operations": [
+                {
+                    "type": "create_card",
+                    "column_id": 1,
+                    "title": "New card",
+                    "details": "",
+                    "due_date": "not-a-date",
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(AIResponseError):
+        AIService(FakeStructuredClient(raw_response)).respond(
+            {"id": 1, "columns": []}, "Create it", []
+        )
+
+
+def test_service_parses_an_empty_string_due_date_as_clearing_it():
+    raw_response = json.dumps(
+        {
+            "reply": "Cleared the due date.",
+            "operations": [
+                {
+                    "type": "edit_card",
+                    "card_id": 1,
+                    "title": None,
+                    "details": None,
+                    "due_date": "",
+                }
+            ],
+        }
+    )
+
+    response = AIService(FakeStructuredClient(raw_response)).respond(
+        {"id": 1, "columns": []}, "Clear the due date", []
+    )
+
+    assert response.operations[0].due_date == ""
 
 
 def test_chat_request_limits_history_to_twenty_messages():

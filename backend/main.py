@@ -2,13 +2,20 @@ import os
 import secrets
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Self
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
@@ -50,6 +57,23 @@ CardTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
 CardDetails = Annotated[str, StringConstraints(max_length=4000)]
+
+
+def _validate_due_date(value: str) -> str:
+    if value == "":
+        return value
+    try:
+        date.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError("due_date must be an empty string or YYYY-MM-DD") from error
+    return value
+
+
+CardDueDate = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=10),
+    AfterValidator(_validate_due_date),
+]
 Username = Annotated[
     str,
     StringConstraints(
@@ -80,6 +104,7 @@ class CardResponse(BaseModel):
     id: int
     title: str
     details: str
+    due_date: str
     position: int
 
 
@@ -118,16 +143,18 @@ class CreateCardRequest(BaseModel):
     column_id: int
     title: CardTitle
     details: CardDetails = ""
+    due_date: CardDueDate = ""
 
 
 class UpdateCardRequest(BaseModel):
     title: CardTitle | None = None
     details: CardDetails | None = None
+    due_date: CardDueDate | None = None
 
     @model_validator(mode="after")
     def require_a_change(self) -> Self:
-        if self.title is None and self.details is None:
-            raise ValueError("Provide a title or details")
+        if self.title is None and self.details is None and self.due_date is None:
+            raise ValueError("Provide a title, details, or due date")
         return self
 
 
@@ -294,6 +321,7 @@ def create_app(
             payload.column_id,
             payload.title,
             payload.details,
+            payload.due_date,
         )
 
     @app.patch("/api/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)
@@ -306,6 +334,7 @@ def create_app(
             card_id,
             title=payload.title,
             details=payload.details,
+            due_date=payload.due_date,
         )
 
     @app.delete("/api/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)

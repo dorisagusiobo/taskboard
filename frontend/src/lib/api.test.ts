@@ -1,10 +1,12 @@
 import {
   ApiError,
+  createCard,
   getBoard,
   logout,
   moveCard,
   sendAIMessage,
   toBoardData,
+  updateCard,
 } from "@/lib/api";
 import { cloneBoard } from "@/test/fixtures";
 
@@ -36,6 +38,7 @@ describe("API client", () => {
       id: 101,
       title: "Server card",
       details: "Loaded from SQLite",
+      dueDate: "",
     });
   });
 
@@ -51,6 +54,70 @@ describe("API client", () => {
         credentials: "same-origin",
         method: "POST",
         body: JSON.stringify({ column_id: 20, position: 0 }),
+      })
+    );
+  });
+
+  it("sends the due date on create and defaults it to empty", async () => {
+    fetchMock.mockResolvedValueOnce(response(201, cloneBoard()));
+
+    await createCard(1, 10, "New card", "Notes", "2026-02-01");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/boards/1/cards",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          column_id: 10,
+          title: "New card",
+          details: "Notes",
+          due_date: "2026-02-01",
+        }),
+      })
+    );
+
+    fetchMock.mockResolvedValueOnce(response(201, cloneBoard()));
+    await createCard(1, 10, "No date card", "Notes");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/boards/1/cards",
+      expect.objectContaining({
+        body: JSON.stringify({
+          column_id: 10,
+          title: "No date card",
+          details: "Notes",
+          due_date: "",
+        }),
+      })
+    );
+  });
+
+  it("only sends a due date update when one is explicitly provided", async () => {
+    fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
+
+    await updateCard(1, 101, "Title", "Details");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/boards/1/cards/101",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          title: "Title",
+          details: "Details",
+          due_date: null,
+        }),
+      })
+    );
+
+    fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
+    await updateCard(1, 101, "Title", "Details", "");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/boards/1/cards/101",
+      expect.objectContaining({
+        body: JSON.stringify({
+          title: "Title",
+          details: "Details",
+          due_date: "",
+        }),
       })
     );
   });

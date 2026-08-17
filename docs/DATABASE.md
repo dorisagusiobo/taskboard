@@ -61,6 +61,7 @@ CREATE TABLE cards (
     column_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT '',
+    due_date TEXT NOT NULL DEFAULT '',
     position INTEGER NOT NULL,
     UNIQUE (column_id, position),
     CHECK (length(trim(title)) > 0),
@@ -76,7 +77,11 @@ CREATE INDEX idx_cards_board_id ON cards(board_id);
 
 `users.password_hash` stores a PBKDF2-HMAC-SHA256 hash (`backend/auth.py`, stdlib `hashlib`/`secrets`, 260,000 iterations, random per-password salt) — never a plaintext password. `POST /api/auth/register` creates a new account (rejecting an already-taken username) and seeds its board in the same transaction; `POST /api/auth/login` verifies the submitted password against the stored hash with a constant-time comparison. `BoardStore.ensure_seed_account` auto-registers the `user` / `password` account only when the `users` table is completely empty, so a fresh install remains zero-config without interfering with real registrations.
 
-Timestamps, board names, roles, soft deletes, and chat tables are omitted because no current behavior needs them.
+Timestamps, roles, soft deletes, and chat tables are omitted because no current behavior needs them.
+
+## Card due dates
+
+`cards.due_date` stores an empty string (no due date) or a `YYYY-MM-DD` string — never `NULL`, matching the `details` column's "empty means unset" convention rather than a nullable-column convention. Validated in two independent places that must stay in sync: `main.py`'s `CardDueDate` type for manual API requests, and `ai_service.py`'s `CardDueDate` type for AI operations (each calls `date.fromisoformat` to reject invalid calendar dates, not just the right shape). On `PATCH .../cards/{card_id}`, `due_date: null` (the request default) leaves it unchanged, `due_date: ""` clears it, and anything else must be a valid date — this mirrors how `title`/`details` already distinguish "not sent" from "sent empty." The frontend computes overdue status purely from `due_date < today` (`frontend/src/lib/kanban.ts`'s `isOverdue`); there is no separate "done" flag, so a card sitting in the Done column with a past due date still shows as overdue.
 
 ## Ownership guarantees
 
@@ -88,7 +93,7 @@ Deleting a user cascades through all of their boards, columns, and cards. Deleti
 
 ## Initialization
 
-On startup, `BoardStore.init_schema()` creates the schema when missing (including an `ALTER TABLE` fallback that adds `password_hash` to a pre-existing `users` table, so upgrading in place doesn't crash), then `BoardStore.ensure_seed_account("user", "password")` registers the zero-config seed account only if the `users` table is completely empty.
+On startup, `BoardStore.init_schema()` creates the schema when missing (including `ALTER TABLE` fallbacks that add `users.password_hash` and `cards.due_date` to pre-existing tables, so upgrading in place doesn't crash), then `BoardStore.ensure_seed_account("user", "password")` registers the zero-config seed account only if the `users` table is completely empty.
 
 Beyond startup, `BoardStore.register_user(username, password)` is the only way a *user* gets created: it hashes the password, inserts the user row, and seeds their first board — five columns plus the eight demo cards from `database-schema.json` — all in one transaction. It raises `UsernameTakenError` for an existing username rather than silently reusing it. `BoardStore.create_board(username, name)` creates any subsequent board for an existing user: five fixed columns, no demo cards (those are onboarding content for the very first board only). Tests use a temporary `DATABASE_PATH`, never the developer database.
 

@@ -22,7 +22,8 @@ Every model response contains:
   "type": "create_card",
   "column_id": 1,
   "title": "Card title",
-  "details": "Card details"
+  "details": "Card details",
+  "due_date": "2026-04-15"
 }
 ```
 
@@ -31,7 +32,8 @@ Every model response contains:
   "type": "edit_card",
   "card_id": 1,
   "title": null,
-  "details": "New details"
+  "details": "New details",
+  "due_date": null
 }
 ```
 
@@ -44,7 +46,7 @@ Every model response contains:
 }
 ```
 
-For `edit_card`, at least one of `title` or `details` must be non-null. No delete, column, user, or board operation is supported.
+`due_date` is either an empty string (no due date) or `YYYY-MM-DD`; the system prompt tells the model today's date so it can resolve relative requests ("tomorrow", "next Friday"). For `edit_card`, `due_date: null` leaves the due date unchanged, an empty string clears it, and at least one of `title`, `details`, or `due_date` must be a real change (not all null). No delete, column, user, or board operation is supported.
 
 The backend validates the JSON again after receipt. When operations are present, it applies the complete list in one SQLite transaction using the same ownership, ordering, and validation rules as manual changes. Any invalid operation rolls back the full list. A successful mutation returns the assistant reply and canonical updated board; a read-only reply returns `board: null`.
 

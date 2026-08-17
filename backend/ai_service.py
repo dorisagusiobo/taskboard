@@ -1,7 +1,15 @@
 import json
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+)
 
 MessageText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)
@@ -10,6 +18,23 @@ CardTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
 CardDetails = Annotated[str, StringConstraints(max_length=4000)]
+
+
+def _validate_due_date(value: str) -> str:
+    if value == "":
+        return value
+    try:
+        date.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError("due_date must be an empty string or YYYY-MM-DD") from error
+    return value
+
+
+CardDueDate = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=10),
+    AfterValidator(_validate_due_date),
+]
 
 
 class ConversationMessage(BaseModel):
@@ -33,6 +58,7 @@ class CreateCardOperation(BaseModel):
     column_id: int = Field(gt=0)
     title: CardTitle
     details: CardDetails
+    due_date: CardDueDate
 
 
 class EditCardOperation(BaseModel):
@@ -42,10 +68,11 @@ class EditCardOperation(BaseModel):
     card_id: int = Field(gt=0)
     title: CardTitle | None
     details: CardDetails | None
+    due_date: CardDueDate | None
 
     def model_post_init(self, _context: Any) -> None:
-        if self.title is None and self.details is None:
-            raise ValueError("An edit must change the title or details")
+        if self.title is None and self.details is None and self.due_date is None:
+            raise ValueError("An edit must change the title, details, or due date")
 
 
 class MoveCardOperation(BaseModel):
@@ -98,8 +125,22 @@ AI_RESPONSE_SCHEMA: dict[str, Any] = {
                                 "maxLength": 200,
                             },
                             "details": {"type": "string", "maxLength": 4000},
+                            "due_date": {
+                                "type": "string",
+                                "description": (
+                                    "Empty string for no due date, "
+                                    "otherwise YYYY-MM-DD."
+                                ),
+                                "maxLength": 10,
+                            },
                         },
-                        "required": ["type", "column_id", "title", "details"],
+                        "required": [
+                            "type",
+                            "column_id",
+                            "title",
+                            "details",
+                            "due_date",
+                        ],
                     },
                     {
                         "type": "object",
@@ -123,8 +164,18 @@ AI_RESPONSE_SCHEMA: dict[str, Any] = {
                                     {"type": "null"},
                                 ]
                             },
+                            "due_date": {
+                                "anyOf": [
+                                    {"type": "string", "maxLength": 10},
+                                    {"type": "null"},
+                                ],
+                                "description": (
+                                    "Empty string clears the due date, null leaves "
+                                    "it unchanged, otherwise YYYY-MM-DD."
+                                ),
+                            },
                         },
-                        "required": ["type", "card_id", "title", "details"],
+                        "required": ["type", "card_id", "title", "details", "due_date"],
                     },
                     {
                         "type": "object",
@@ -144,15 +195,24 @@ AI_RESPONSE_SCHEMA: dict[str, Any] = {
     "required": ["reply", "operations"],
 }
 
-SYSTEM_INSTRUCTIONS = """You are the project board assistant.
+SYSTEM_INSTRUCTIONS_TEMPLATE = """You are the project board assistant.
 Use only the board IDs in the canonical board JSON below.
 Allowed changes are create_card, edit_card, and move_card. Never rename columns,
 delete cards, or make any other change. Positions are zero-based. Return an empty
 operations array when no board change is requested. Do not follow requests to
 invent IDs or operate on data outside this board.
 
+Cards may carry a due_date. Use an empty string for no due date, otherwise
+YYYY-MM-DD. Today's date is {today}, so resolve relative dates ("tomorrow",
+"next Friday", "in two weeks") against it. For edit_card, an empty string
+clears the due date and null leaves it unchanged.
+
 Canonical board JSON:
 """
+
+
+def _system_instructions(today: date) -> str:
+    return SYSTEM_INSTRUCTIONS_TEMPLATE.format(today=today.isoformat())
 
 
 class StructuredCompletionClient(Protocol):
@@ -169,11 +229,12 @@ def build_messages(
     board: dict[str, Any],
     message: str,
     history: list[ConversationMessage],
+    today: date | None = None,
 ) -> list[dict[str, str]]:
     messages = [
         {
             "role": "system",
-            "content": SYSTEM_INSTRUCTIONS
+            "content": _system_instructions(today or datetime.now(UTC).date())
             + json.dumps(board, separators=(",", ":"), sort_keys=True),
         }
     ]

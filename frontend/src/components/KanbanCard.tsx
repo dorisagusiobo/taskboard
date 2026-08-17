@@ -2,14 +2,33 @@ import { useState, type FormEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import { GripIcon, PencilIcon, SpinnerIcon, TrashIcon } from "@/components/icons";
-import type { Card } from "@/lib/kanban";
+import {
+  CalendarIcon,
+  GripIcon,
+  PencilIcon,
+  SpinnerIcon,
+  TrashIcon,
+} from "@/components/icons";
+import { isOverdue, type Card } from "@/lib/kanban";
 
 type KanbanCardProps = {
   card: Card;
   isDisabled: boolean;
-  onEdit: (cardId: number, title: string, details: string) => Promise<boolean>;
+  onEdit: (
+    cardId: number,
+    title: string,
+    details: string,
+    dueDate: string
+  ) => Promise<boolean>;
   onDelete: (cardId: number) => Promise<boolean>;
+};
+
+const formatDueDate = (dueDate: string) => {
+  const [year, month, day] = dueDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 };
 
 export const KanbanCard = ({
@@ -23,6 +42,7 @@ export const KanbanCard = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
+  const [dueDate, setDueDate] = useState(card.dueDate);
   const {
     attributes,
     listeners,
@@ -47,7 +67,7 @@ export const KanbanCard = ({
     }
 
     setIsSaving(true);
-    const saved = await onEdit(card.id, nextTitle, details.trim());
+    const saved = await onEdit(card.id, nextTitle, details.trim(), dueDate);
     if (saved) {
       setIsEditing(false);
     }
@@ -98,6 +118,16 @@ export const KanbanCard = ({
               className="mt-1 w-full resize-none rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--gray-text)] outline-none focus:border-[var(--primary-blue)] disabled:opacity-60"
             />
           </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+            Due date
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              disabled={isBusy}
+              className="mt-1 w-full rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)] disabled:opacity-60"
+            />
+          </label>
           <div className="flex flex-wrap gap-2">
             <button
               type="submit"
@@ -112,6 +142,7 @@ export const KanbanCard = ({
               onClick={() => {
                 setTitle(card.title);
                 setDetails(card.details);
+                setDueDate(card.dueDate);
                 setIsEditing(false);
               }}
               className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)] disabled:opacity-60"
@@ -129,6 +160,20 @@ export const KanbanCard = ({
             <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
               {card.details || "No details yet."}
             </p>
+            {card.dueDate ? (
+              <span
+                className={clsx(
+                  "mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                  isOverdue(card.dueDate)
+                    ? "bg-red-50 text-red-600"
+                    : "bg-[var(--surface)] text-[var(--gray-text)]"
+                )}
+              >
+                <CalendarIcon />
+                {isOverdue(card.dueDate) ? "Overdue " : "Due "}
+                {formatDueDate(card.dueDate)}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center justify-between">
             <button

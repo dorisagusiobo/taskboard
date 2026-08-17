@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { PlusIcon } from "@/components/icons";
 
-const initialFormState = { title: "", details: "" };
+const initialFormState = { title: "", details: "", dueDate: "" };
 
 type NewCardFormProps = {
   isDisabled: boolean;
-  onAdd: (title: string, details: string) => Promise<boolean>;
+  onAdd: (title: string, details: string, dueDate: string) => Promise<boolean>;
 };
 
 export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
@@ -22,7 +22,8 @@ export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
     setIsSubmitting(true);
     const saved = await onAdd(
       formState.title.trim(),
-      formState.details.trim()
+      formState.details.trim(),
+      formState.dueDate
     );
     if (saved) {
       setFormState(initialFormState);
@@ -61,6 +62,22 @@ export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
             rows={3}
             className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--primary-blue)]"
           />
+          <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+            Due date
+            <input
+              type="date"
+              value={formState.dueDate}
+              aria-label="New card due date"
+              onChange={(event) =>
+                setFormState((prev) => ({
+                  ...prev,
+                  dueDate: event.target.value,
+                }))
+              }
+              disabled={isBusy}
+              className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+          </label>
           <div className="flex items-center gap-2">
             <button
               type="submit"

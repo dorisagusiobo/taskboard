@@ -14,7 +14,8 @@ export type AIChatResult = {
   board: ApiBoard | null;
 };
 
-type ApiCard = Card & {
+type ApiCard = Omit<Card, "dueDate"> & {
+  due_date: string;
   position: number;
 };
 
@@ -120,22 +121,29 @@ export const createCard = (
   boardId: number,
   columnId: number,
   title: string,
-  details: string
+  details: string,
+  dueDate: string = ""
 ) =>
   request<ApiBoard>(
     `/api/boards/${boardId}/cards`,
-    jsonOptions("POST", { column_id: columnId, title, details })
+    jsonOptions("POST", {
+      column_id: columnId,
+      title,
+      details,
+      due_date: dueDate,
+    })
   );
 
 export const updateCard = (
   boardId: number,
   cardId: number,
   title: string,
-  details: string
+  details: string,
+  dueDate?: string
 ) =>
   request<ApiBoard>(
     `/api/boards/${boardId}/cards/${cardId}`,
-    jsonOptions("PATCH", { title, details })
+    jsonOptions("PATCH", { title, details, due_date: dueDate ?? null })
   );
 
 export const deleteCard = (boardId: number, cardId: number) =>
@@ -169,7 +177,12 @@ export const toBoardData = (board: ApiBoard): BoardData => {
     board.columns.flatMap((column) =>
       column.cards.map((card) => [
         card.id,
-        { id: card.id, title: card.title, details: card.details },
+        {
+          id: card.id,
+          title: card.title,
+          details: card.details,
+          dueDate: card.due_date,
+        },
       ])
     )
   );

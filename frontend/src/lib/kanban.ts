@@ -2,6 +2,7 @@ export type Card = {
   id: number;
   title: string;
   details: string;
+  dueDate: string;
 };
 
 export type Column = {
@@ -16,6 +17,11 @@ export type BoardData = {
   columns: Column[];
   cards: Record<number, Card>;
 };
+
+export const isOverdue = (
+  dueDate: string,
+  today: string = new Date().toISOString().slice(0, 10)
+): boolean => dueDate !== "" && dueDate < today;
 
 const isColumnId = (columns: Column[], id: number) =>
   columns.some((column) => column.id === id);

@@ -1,4 +1,19 @@
-import { moveCard, type Column } from "@/lib/kanban";
+import { isOverdue, moveCard, type Column } from "@/lib/kanban";
+
+describe("isOverdue", () => {
+  it("is false when there is no due date", () => {
+    expect(isOverdue("", "2026-01-15")).toBe(false);
+  });
+
+  it("is false for a due date today or in the future", () => {
+    expect(isOverdue("2026-01-15", "2026-01-15")).toBe(false);
+    expect(isOverdue("2026-01-16", "2026-01-15")).toBe(false);
+  });
+
+  it("is true for a due date in the past", () => {
+    expect(isOverdue("2026-01-14", "2026-01-15")).toBe(true);
+  });
+});
 
 describe("moveCard", () => {
   const baseColumns: Column[] = [
