@@ -53,6 +53,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const mutationInFlight = useRef(false);
   const chatTriggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -96,6 +97,45 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
   useEffect(() => {
     void loadBoards();
   }, [loadBoards]);
+
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      return (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      );
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === "/" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !isTypingTarget(event.target)
+      ) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (
+        event.key === "Escape" &&
+        document.activeElement === searchInputRef.current &&
+        searchQuery
+      ) {
+        event.preventDefault();
+        setSearchQuery("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [searchQuery]);
 
   const applyMutation = async (
     mutation: () => Promise<ApiBoard>
@@ -387,9 +427,10 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
             <div className="relative w-full max-w-xs">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gray-text)]" />
               <input
+                ref={searchInputRef}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search cards..."
+                placeholder="Search cards... (press /)"
                 aria-label="Search cards"
                 maxLength={200}
                 className="w-full rounded-full border border-[var(--stroke)] bg-white py-2 pl-9 pr-9 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"

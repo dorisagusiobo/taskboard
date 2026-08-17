@@ -503,6 +503,30 @@ test("searches cards across columns without disturbing drag state", async ({
   await expect(page.getByText("Unrelated other card")).toBeVisible();
 });
 
+test("focuses search with '/' and clears it with Escape", async ({ page }) => {
+  await login(page);
+  const searchInput = page.getByLabel("Search cards");
+
+  await page.locator("body").click();
+  await expect(searchInput).not.toBeFocused();
+
+  await page.keyboard.press("/");
+  await expect(searchInput).toBeFocused();
+
+  await searchInput.fill("shortcut search text");
+  await expect(searchInput).toHaveValue("shortcut search text");
+
+  await page.keyboard.press("Escape");
+  await expect(searchInput).toHaveValue("");
+
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Slash in title");
+  await page.keyboard.press("/");
+  await expect(page.getByLabel("New card title")).toHaveValue("Slash in title/");
+  await expect(searchInput).not.toBeFocused();
+});
+
 test("exports the board as CSV and JSON downloads", async ({ page }) => {
   await login(page);
   const firstColumn = page.locator('[data-testid^="column-"]').first();

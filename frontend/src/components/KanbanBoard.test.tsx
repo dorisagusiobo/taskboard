@@ -78,6 +78,43 @@ describe("KanbanBoard", () => {
     expect(secondCard.className).not.toContain("hidden");
   });
 
+  it("focuses search on '/' and clears it on Escape", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    const searchInput = screen.getByLabelText("Search cards");
+    expect(searchInput).not.toHaveFocus();
+
+    await user.keyboard("/");
+    expect(searchInput).toHaveFocus();
+
+    await user.type(searchInput, "Second");
+    expect(searchInput).toHaveValue("Second");
+
+    await user.keyboard("{Escape}");
+    expect(searchInput).toHaveValue("");
+  });
+
+  it("does not hijack '/' while typing in another field", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    const renameInput = screen.getByDisplayValue(cloneBoard().columns[0].title);
+    await user.click(renameInput);
+    await user.keyboard("/");
+
+    expect(renameInput).toHaveValue(`${cloneBoard().columns[0].title}/`);
+    expect(screen.getByLabelText("Search cards")).not.toHaveFocus();
+  });
+
   it("renames a column with the canonical API response", async () => {
     const renamed = cloneBoard();
     renamed.columns[0].title = "Persistent ideas";
