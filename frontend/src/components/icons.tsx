@@ -85,3 +85,10 @@ export const CalendarIcon = ({ className }: IconProps = {}) => (
     <path d="M3 10h18" />
   </svg>
 );
+
+export const SearchIcon = ({ className }: IconProps = {}) => (
+  <svg {...baseProps} className={className}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m21 21-4.35-4.35" />
+  </svg>
+);

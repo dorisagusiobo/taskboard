@@ -44,6 +44,17 @@ export const labelAccent = (label: string): number => {
   return Math.abs(hash) % LABEL_ACCENT_COUNT;
 };
 
+export const cardMatchesQuery = (card: Card, query: string): boolean => {
+  const trimmed = query.trim().toLowerCase();
+  if (trimmed === "") {
+    return true;
+  }
+  const haystack = [card.title, card.details, ...card.labels]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(trimmed);
+};
+
 const isColumnId = (columns: Column[], id: number) =>
   columns.some((column) => column.id === id);
 

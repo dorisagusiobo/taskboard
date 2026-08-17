@@ -1,11 +1,44 @@
 import {
+  cardMatchesQuery,
   formatLabels,
   isOverdue,
   labelAccent,
   moveCard,
   parseLabels,
+  type Card,
   type Column,
 } from "@/lib/kanban";
+
+const baseCard: Card = {
+  id: 1,
+  title: "Fix login bug",
+  details: "Users can't sign in on Safari",
+  dueDate: "",
+  labels: ["bug", "urgent"],
+};
+
+describe("cardMatchesQuery", () => {
+  it("matches everything for an empty or whitespace-only query", () => {
+    expect(cardMatchesQuery(baseCard, "")).toBe(true);
+    expect(cardMatchesQuery(baseCard, "   ")).toBe(true);
+  });
+
+  it("matches the title case-insensitively", () => {
+    expect(cardMatchesQuery(baseCard, "LOGIN")).toBe(true);
+  });
+
+  it("matches details", () => {
+    expect(cardMatchesQuery(baseCard, "safari")).toBe(true);
+  });
+
+  it("matches labels", () => {
+    expect(cardMatchesQuery(baseCard, "urgent")).toBe(true);
+  });
+
+  it("does not match unrelated text", () => {
+    expect(cardMatchesQuery(baseCard, "onboarding")).toBe(false);
+  });
+});
 
 describe("isOverdue", () => {
   it("is false when there is no due date", () => {

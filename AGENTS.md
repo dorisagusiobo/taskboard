@@ -11,6 +11,8 @@ This project is building a Project Management App. Key features:
 
 ## Limitations
 
+This section describes the original MVP scope as first built. It has since been deliberately superseded: the app now supports real self-service accounts (no hardcoded credential) and multiple boards per user — see `CLAUDE.md`'s "Post-MVP architecture pivot" note and `backend/AGENTS.md`/`frontend/AGENTS.md` for the current architecture. Kept here as a historical record of the starting point, not as current constraints.
+
 For the MVP, there will only be a user sign in (hardcoded to 'user' and 'password') but the database will support multiple users for future.
 
 For the MVP, there will only be 1 Kanban board per signed in user.

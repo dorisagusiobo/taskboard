@@ -369,6 +369,43 @@ test("sets, edits, and clears a card's labels", async ({ page }) => {
   await expect(card.getByText("design")).toHaveCount(0);
 });
 
+test("searches cards across columns without disturbing drag state", async ({
+  page,
+}) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Searchable roadmap card");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
+    firstColumn.getByRole("button", { name: "Add card" }).click(),
+  ]);
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Unrelated other card");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
+    firstColumn.getByRole("button", { name: "Add card" }).click(),
+  ]);
+
+  await expect(page.getByText("Searchable roadmap card")).toBeVisible();
+  await expect(page.getByText("Unrelated other card")).toBeVisible();
+
+  await page.getByLabel("Search cards").fill("roadmap");
+
+  await expect(page.getByText("Searchable roadmap card")).toBeVisible();
+  await expect(page.getByText("Unrelated other card")).toBeHidden();
+
+  await page.getByLabel("Search cards").fill("no card matches this");
+  await expect(page.getByText("No matching cards").first()).toBeVisible();
+  await expect(page.getByText("Searchable roadmap card")).toBeHidden();
+
+  await page.getByLabel("Clear search").click();
+  await expect(page.getByLabel("Search cards")).toHaveValue("");
+  await expect(page.getByText("Searchable roadmap card")).toBeVisible();
+  await expect(page.getByText("Unrelated other card")).toBeVisible();
+});
+
 test("uses AI through FastAPI and preserves validated changes", async ({ page }) => {
   await login(page);
   const firstColumn = page.locator('[data-testid^="column-"]').first();

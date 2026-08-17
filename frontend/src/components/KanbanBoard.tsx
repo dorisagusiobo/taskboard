@@ -17,7 +17,7 @@ import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { AIChatSidebar } from "@/components/AIChatSidebar";
 import { BoardSwitcher } from "@/components/BoardSwitcher";
-import { ChatIcon } from "@/components/icons";
+import { ChatIcon, CloseIcon, SearchIcon } from "@/components/icons";
 import {
   ApiError,
   createBoard,
@@ -49,6 +49,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const mutationInFlight = useRef(false);
   const chatTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -125,6 +126,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
     if (isMutating || boardId === board?.id) {
       return;
     }
+    setSearchQuery("");
     void loadBoard(boardId);
   };
 
@@ -368,15 +370,39 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
             </div>
           </div>
 
-          <BoardSwitcher
-            boards={boards}
-            activeBoardId={board.id}
-            isDisabled={isMutating}
-            onSelect={handleSelectBoard}
-            onCreate={handleCreateBoard}
-            onRename={handleRenameBoard}
-            onDelete={handleDeleteBoard}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <BoardSwitcher
+              boards={boards}
+              activeBoardId={board.id}
+              isDisabled={isMutating}
+              onSelect={handleSelectBoard}
+              onCreate={handleCreateBoard}
+              onRename={handleRenameBoard}
+              onDelete={handleDeleteBoard}
+            />
+            <div className="relative w-full max-w-xs">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gray-text)]" />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search cards..."
+                aria-label="Search cards"
+                maxLength={200}
+                className="w-full rounded-full border border-[var(--stroke)] bg-white py-2 pl-9 pr-9 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                  title="Clear search"
+                  className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full p-0.5 text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+                >
+                  <CloseIcon />
+                </button>
+              ) : null}
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {board.columns.map((column) => (
@@ -407,6 +433,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
                 column={column}
                 cards={column.cardIds.map((cardId) => board.cards[cardId])}
                 isDisabled={isMutating}
+                searchQuery={searchQuery}
                 onRename={(columnId, title) =>
                   applyMutation(() => renameColumn(board.id, columnId, title))
                 }

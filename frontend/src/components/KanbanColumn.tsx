@@ -5,12 +5,13 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
 import { CheckIcon, SpinnerIcon } from "@/components/icons";
-import type { Card, Column } from "@/lib/kanban";
+import { cardMatchesQuery, type Card, type Column } from "@/lib/kanban";
 
 type KanbanColumnProps = {
   column: Column;
   cards: Card[];
   isDisabled: boolean;
+  searchQuery: string;
   onRename: (columnId: number, title: string) => Promise<boolean>;
   onAddCard: (
     columnId: number,
@@ -33,6 +34,7 @@ export const KanbanColumn = ({
   column,
   cards,
   isDisabled,
+  searchQuery,
   onRename,
   onAddCard,
   onEditCard,
@@ -44,6 +46,10 @@ export const KanbanColumn = ({
     id: column.id,
     disabled: isDisabled,
   });
+  const visibleCount = cards.filter((card) =>
+    cardMatchesQuery(card, searchQuery)
+  ).length;
+  const hasHiddenMatches = cards.length > 0 && visibleCount === 0;
 
   const handleRename = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -74,7 +80,9 @@ export const KanbanColumn = ({
           <div className="flex items-center gap-3">
             <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} cards
+              {searchQuery.trim() === ""
+                ? `${cards.length} cards`
+                : `${visibleCount} of ${cards.length} cards`}
             </span>
           </div>
           <form onSubmit={handleRename} className="mt-3 flex items-center gap-2">
@@ -105,6 +113,7 @@ export const KanbanColumn = ({
               key={`${card.id}:${card.title}:${card.details}:${card.dueDate}:${card.labels.join(",")}`}
               card={card}
               isDisabled={isDisabled}
+              isVisible={cardMatchesQuery(card, searchQuery)}
               onEdit={onEditCard}
               onDelete={onDeleteCard}
             />
@@ -113,6 +122,11 @@ export const KanbanColumn = ({
         {cards.length === 0 && (
           <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[var(--stroke)] px-3 py-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
             Drop a card here
+          </div>
+        )}
+        {hasHiddenMatches && (
+          <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[var(--stroke)] px-3 py-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+            No matching cards
           </div>
         )}
       </div>

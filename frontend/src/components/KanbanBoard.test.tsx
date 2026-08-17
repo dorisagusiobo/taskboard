@@ -48,6 +48,36 @@ describe("KanbanBoard", () => {
     });
   });
 
+  it("filters cards by search query without removing them from the DOM", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    const firstCard = screen.getByTestId("card-101");
+    const secondCard = screen.getByTestId("card-102");
+    expect(firstCard.className).not.toContain("hidden");
+    expect(secondCard.className).not.toContain("hidden");
+
+    await user.type(screen.getByLabelText("Search cards"), "Second");
+
+    expect(firstCard.className).toContain("hidden");
+    expect(secondCard.className).not.toContain("hidden");
+    expect(screen.getByText("1 of 2 cards")).toBeVisible();
+
+    await user.clear(screen.getByLabelText("Search cards"));
+    await user.type(screen.getByLabelText("Search cards"), "no such card");
+
+    expect(screen.getByText("No matching cards")).toBeVisible();
+
+    await user.click(screen.getByLabelText("Clear search"));
+    expect(screen.getByLabelText("Search cards")).toHaveValue("");
+    expect(firstCard.className).not.toContain("hidden");
+    expect(secondCard.className).not.toContain("hidden");
+  });
+
   it("renames a column with the canonical API response", async () => {
     const renamed = cloneBoard();
     renamed.columns[0].title = "Persistent ideas";
