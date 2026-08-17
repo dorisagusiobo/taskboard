@@ -7,6 +7,7 @@ from database import (
     BoardNotFoundError,
     BoardStore,
     CardNotFoundError,
+    IncorrectPasswordError,
     LastBoardError,
     UsernameTakenError,
 )
@@ -43,6 +44,33 @@ def test_registration_seeds_a_board_and_hashes_the_password(database_path: Path)
         assert stored_hash != "password"
     finally:
         connection.close()
+
+
+def test_change_password_updates_the_hash_and_rejects_a_wrong_current_password(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("user", "password")
+
+    store.change_password("user", "password", "new-password")
+
+    assert store.verify_password("user", "new-password") is True
+    assert store.verify_password("user", "password") is False
+
+    with pytest.raises(IncorrectPasswordError):
+        store.change_password("user", "wrong-current", "another-password")
+
+    assert store.verify_password("user", "new-password") is True
+
+
+def test_change_password_for_an_unknown_user_raises_incorrect_password(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("user", "password")
+
+    with pytest.raises(IncorrectPasswordError):
+        store.change_password("missing", "anything", "new-password")
 
 
 def test_registering_an_existing_username_is_rejected_and_preserves_data(

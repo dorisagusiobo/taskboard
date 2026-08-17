@@ -196,6 +196,61 @@ describe("AuthGate", () => {
     );
   });
 
+  it("changes the password and closes the form on success", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(204));
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Change password" })
+    );
+    await user.type(screen.getByLabelText("Current password"), "password");
+    await user.type(screen.getByLabelText("New password"), "new-password");
+    await user.click(screen.getByLabelText("Save new password"));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/auth/password",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          current_password: "password",
+          new_password: "new-password",
+        }),
+      })
+    );
+    expect(
+      await screen.findByRole("button", { name: "Change password" })
+    ).toBeVisible();
+  });
+
+  it("shows an error and keeps the form open when the current password is wrong", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(
+        response(400, { detail: "Current password is incorrect" })
+      );
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Change password" })
+    );
+    await user.type(screen.getByLabelText("Current password"), "wrong");
+    await user.type(screen.getByLabelText("New password"), "new-password");
+    await user.click(screen.getByLabelText("Save new password"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Current password is incorrect"
+    );
+    expect(screen.getByLabelText("Current password")).toBeVisible();
+  });
+
   it("returns to sign in when the board session has expired", async () => {
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))

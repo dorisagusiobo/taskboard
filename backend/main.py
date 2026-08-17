@@ -26,6 +26,7 @@ from database import (
     BoardStore,
     CardNotFoundError,
     ColumnNotFoundError,
+    IncorrectPasswordError,
     InvalidPositionError,
     LastBoardError,
     UsernameTakenError,
@@ -125,6 +126,11 @@ class LoginCredentials(BaseModel):
 class RegisterRequest(BaseModel):
     username: Username
     password: Password
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: Password
 
 
 class UserSession(BaseModel):
@@ -310,6 +316,20 @@ def create_app(
     @app.post("/api/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
     def logout(request: Request):
         request.session.clear()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.post("/api/auth/password", status_code=status.HTTP_204_NO_CONTENT)
+    def change_password(payload: ChangePasswordRequest, request: Request):
+        username = authenticated_username(request)
+        try:
+            board_store.change_password(
+                username, payload.current_password, payload.new_password
+            )
+        except IncorrectPasswordError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect",
+            ) from error
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get("/api/boards", response_model=list[BoardSummary])

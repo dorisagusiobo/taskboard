@@ -77,6 +77,53 @@ test("creates a new account with its own seeded board", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
 });
 
+test("changes a password and requires the new one on the next sign-in", async ({
+  page,
+}) => {
+  const username = `password-change-${Date.now()}`;
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Need an account? Create one" })
+    .click();
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill("original-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Change password" }).click();
+  await page.getByLabel("Current password").fill("wrong-current-password");
+  await page.getByLabel("New password", { exact: true }).fill("updated-password");
+  await page.getByLabel("Save new password").click();
+  await expect(page.getByText("Current password is incorrect.")).toBeVisible();
+
+  await page.getByLabel("Current password").fill("original-password");
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/auth/password" &&
+        response.ok()
+    ),
+    page.getByLabel("Save new password").click(),
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Change password" })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill("original-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator("form").getByRole("alert")).toHaveText(
+    "Invalid username or password."
+  );
+
+  await page.getByLabel("Password").fill("updated-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+});
+
 test("rejects creating an account with a username that is already taken", async ({
   page,
 }) => {

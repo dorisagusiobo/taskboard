@@ -171,3 +171,60 @@ def test_logout_clears_the_session(client):
     assert response.status_code == 204
     assert "expires=thu, 01 jan 1970" in response.headers["set-cookie"].lower()
     assert client.get("/api/auth/me").status_code == 401
+
+
+def test_change_password_requires_authentication(client):
+    response = client.post(
+        "/api/auth/password",
+        json={"current_password": "password", "new_password": "new-password"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_change_password_updates_the_stored_hash(client):
+    client.post("/api/auth/login", json={"username": "user", "password": "password"})
+
+    response = client.post(
+        "/api/auth/password",
+        json={"current_password": "password", "new_password": "new-password"},
+    )
+    assert response.status_code == 204
+
+    client.post("/api/auth/logout")
+    old_login = client.post(
+        "/api/auth/login", json={"username": "user", "password": "password"}
+    )
+    assert old_login.status_code == 401
+
+    new_login = client.post(
+        "/api/auth/login", json={"username": "user", "password": "new-password"}
+    )
+    assert new_login.status_code == 200
+
+
+def test_change_password_rejects_an_incorrect_current_password(client):
+    client.post("/api/auth/login", json={"username": "user", "password": "password"})
+
+    response = client.post(
+        "/api/auth/password",
+        json={"current_password": "wrong-password", "new_password": "new-password"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Current password is incorrect"}
+    still_works = client.post(
+        "/api/auth/login", json={"username": "user", "password": "password"}
+    )
+    assert still_works.status_code == 200
+
+
+def test_change_password_rejects_a_new_password_that_is_too_short(client):
+    client.post("/api/auth/login", json={"username": "user", "password": "password"})
+
+    response = client.post(
+        "/api/auth/password",
+        json={"current_password": "password", "new_password": "short"},
+    )
+
+    assert response.status_code == 422

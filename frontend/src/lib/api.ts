@@ -94,6 +94,15 @@ export const register = (username: string, password: string) =>
 export const logout = () =>
   request<void>("/api/auth/logout", { method: "POST" });
 
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  request<void>(
+    "/api/auth/password",
+    jsonOptions("POST", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    })
+  );
+
 export const listBoards = () => request<BoardSummary[]>("/api/boards");
 
 export const createBoard = (name: string) =>

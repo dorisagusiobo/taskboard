@@ -13,9 +13,11 @@ From the project root, use the platform script for your OS:
 The app is served at http://localhost:8000.
 The start script returns only after the container reports a healthy API, or prints the container logs and exits with an error.
 
-A zero-config account (username `user`, password `password`) is created automatically the first time the app starts with an empty database, so you can sign in right away. Use "Need an account? Create one" on the sign-in screen to register additional accounts (username 3+ characters, password 8+ characters) — each account gets its own private boards.
+A zero-config account (username `user`, password `password`) is created automatically the first time the app starts with an empty database, so you can sign in right away. Use "Need an account? Create one" on the sign-in screen to register additional accounts (username 3+ characters, password 8+ characters) — each account gets its own private boards. Use "Change password" next to "Sign out" to change your password once signed in. There is no password-reset flow, so keep your password somewhere safe.
 
 Each account can hold any number of boards. Use the board switcher at the top of the page to create, rename, switch between, or delete boards (you always keep at least one). Every board has the same five fixed columns (Backlog, Discovery, In Progress, Review, Done); only the first board created for a new account starts with sample cards.
+
+Cards can carry a due date (overdue ones get a red badge) and up to 5 short labels. Use the search box above a board to filter its cards by title, details, or label.
 
 Use **Ask AI** on the board to open the assistant. The assistant can answer questions and create, edit, or move cards on the board you currently have open. Conversation history stays only in browser memory and clears on reload or logout; validated board changes persist in SQLite.
 

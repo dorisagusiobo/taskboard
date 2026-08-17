@@ -139,6 +139,10 @@ class LastBoardError(Exception):
     pass
 
 
+class IncorrectPasswordError(Exception):
+    pass
+
+
 class BoardStore:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -229,6 +233,32 @@ class BoardStore:
         if row is None or not row["password_hash"]:
             return False
         return check_password(password, row["password_hash"])
+
+    def change_password(
+        self, username: str, current_password: str, new_password: str
+    ) -> None:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT password_hash FROM users WHERE username = ?", (username,)
+            ).fetchone()
+            if (
+                row is None
+                or not row["password_hash"]
+                or not check_password(current_password, row["password_hash"])
+            ):
+                raise IncorrectPasswordError
+            connection.execute(
+                "UPDATE users SET password_hash = ? WHERE username = ?",
+                (hash_password(new_password), username),
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def list_boards(self, username: str) -> list[dict[str, Any]]:
         connection = self._connect()

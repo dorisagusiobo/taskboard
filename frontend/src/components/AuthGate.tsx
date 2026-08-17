@@ -1,9 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { LoginForm } from "@/components/LoginForm";
-import { ApiError, getSession, login, logout, register } from "@/lib/api";
+import {
+  ApiError,
+  changePassword,
+  getSession,
+  login,
+  logout,
+  register,
+} from "@/lib/api";
 
 type AuthStatus = "loading" | "anonymous" | "authenticated";
 
@@ -88,6 +96,31 @@ export const AuthGate = () => {
     }
   };
 
+  const handleChangePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<boolean> => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      return true;
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 400) {
+        setError("Current password is incorrect.");
+        return false;
+      }
+      if (requestError instanceof ApiError && requestError.status === 422) {
+        setError("New password needs 8+ characters.");
+        return false;
+      }
+      setError("Unable to change your password. Please try again.");
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSessionExpired = useCallback(() => {
     setUsername(null);
     setError("Your session ended. Please sign in again.");
@@ -117,7 +150,7 @@ export const AuthGate = () => {
 
   return (
     <div>
-      <div className="relative z-20 mx-auto flex max-w-[1500px] justify-end px-6 pt-6">
+      <div className="relative z-20 mx-auto flex max-w-[1500px] flex-col items-end gap-2 px-6 pt-6">
         <div className="flex flex-wrap items-center justify-end gap-3 rounded-full border border-[var(--stroke)] bg-white/90 px-4 py-2 shadow-[var(--shadow)] backdrop-blur">
           <span className="text-sm text-[var(--gray-text)]">
             Signed in as <strong className="text-[var(--navy-dark)]">{username}</strong>
@@ -131,6 +164,10 @@ export const AuthGate = () => {
             {isSubmitting ? "Signing out..." : "Sign out"}
           </button>
         </div>
+        <ChangePasswordForm
+          isSubmitting={isSubmitting}
+          onSubmit={handleChangePassword}
+        />
       </div>
       {error ? (
         <p className="mx-auto mt-4 max-w-xl text-center text-sm text-red-700" role="alert">

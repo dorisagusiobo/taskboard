@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A local-first Kanban project management app: FastAPI backend (Python, sync `sqlite3`), a statically-exported Next.js frontend served by FastAPI, SQLite persistence, and an AI chat sidebar (OpenRouter) that can create/edit/move cards. Ships as a single Docker container for local use. See root `AGENTS.md` for product/business requirements and coding-standards ground rules (simplicity over engineering, no emojis, root-cause debugging), and `docs/PLAN.md` for the part-by-part build history (all 10 parts implemented).
 
-**Post-MVP architecture pivot:** the original MVP shipped a single hardcoded user and exactly one board. It is now a real multi-user, multi-board product: real per-user accounts (hashed passwords, self-service registration), multi-board-per-user, card due dates and labels (both manual and AI-assisted), and client-side card search have all landed. The per-board shape is still fixed at exactly five columns (Backlog/Discovery/In Progress/Review/Done) — that constraint was deliberately kept, not dropped. Further product features remain open follow-ups; see git history for what's landed so far.
+**Post-MVP architecture pivot:** the original MVP shipped a single hardcoded user and exactly one board. It is now a real multi-user, multi-board product: real per-user accounts (hashed passwords, self-service registration, self-service password change), multi-board-per-user, card due dates and labels (both manual and AI-assisted), and client-side card search have all landed. The per-board shape is still fixed at exactly five columns (Backlog/Discovery/In Progress/Review/Done) — that constraint was deliberately kept, not dropped. Further product features remain open follow-ups; see git history for what's landed so far.
 
 There are three `AGENTS.md` files with directory-scoped rules: root, `backend/AGENTS.md`, `frontend/AGENTS.md` (the latter two supplement, and are subordinate to, the root file). Read the relevant one before editing in that directory.
 
@@ -48,7 +48,7 @@ Whole-app / Docker (from repo root):
 ./scripts/test-e2e-docker.sh   # isolated volume + deterministic fake OpenRouter server, no API spend
 ```
 
-On first run, a zero-config seed account (`user` / `password`) is auto-registered so the app works immediately (`BoardStore.ensure_seed_account`, only fires when the `users` table is empty). Real accounts now go through `POST /api/auth/register` (username 3-50 chars `[A-Za-z0-9_-]`, password 8+ chars) with PBKDF2-hashed passwords (`backend/auth.py`, stdlib-only, no new dependency); the frontend login screen has a "Create one" toggle for this. `POST /api/auth/login` verifies against the stored hash.
+On first run, a zero-config seed account (`user` / `password`) is auto-registered so the app works immediately (`BoardStore.ensure_seed_account`, only fires when the `users` table is empty). Real accounts now go through `POST /api/auth/register` (username 3-50 chars `[A-Za-z0-9_-]`, password 8+ chars) with PBKDF2-hashed passwords (`backend/auth.py`, stdlib-only, no new dependency); the frontend login screen has a "Create one" toggle for this. `POST /api/auth/login` verifies against the stored hash. Once signed in, `POST /api/auth/password` (`ChangePasswordForm` in the header) lets a user change their own password given the current one; there is no password-reset flow.
 
 ## Architecture
 
@@ -78,6 +78,7 @@ Auth is always resolved server-side from the signed session (`request.session["u
 - `components/BoardSwitcher.tsx` — lists the user's boards as pills, and handles select/create/rename/delete (delete is hidden when it's the only board, mirroring the backend's `LastBoardError` guard).
 - `components/KanbanColumn.tsx`, `KanbanCard.tsx`, `KanbanCardPreview.tsx`, `NewCardForm.tsx` — column/card presentation, drag-and-drop targets, card add/edit forms, and search-driven visibility.
 - `components/AuthGate.tsx` / `LoginForm.tsx` — checks `/api/auth/me` to gate the login/register form vs. board; `LoginForm` toggles between sign-in and self-service registration (`POST /api/auth/register`).
+- `components/ChangePasswordForm.tsx` — collapsed-by-default inline form in the authenticated header (`POST /api/auth/password`).
 - `components/AIChatSidebar.tsx` — the Ask AI drawer; calls `/api/boards/{board_id}/ai/chat` and replaces board state with the canonical response on a successful mutation.
 - `components/icons.tsx` — shared inline-SVG icons (no icon library dependency).
 - `lib/kanban.ts` — pure board types, move/reorder planning logic, due-date/label/search helpers (no side effects; this is where all UI-independent board math lives).

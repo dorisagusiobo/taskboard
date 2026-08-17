@@ -78,6 +78,8 @@ CREATE INDEX idx_cards_board_id ON cards(board_id);
 
 `users.password_hash` stores a PBKDF2-HMAC-SHA256 hash (`backend/auth.py`, stdlib `hashlib`/`secrets`, 260,000 iterations, random per-password salt) — never a plaintext password. `POST /api/auth/register` creates a new account (rejecting an already-taken username) and seeds its board in the same transaction; `POST /api/auth/login` verifies the submitted password against the stored hash with a constant-time comparison. `BoardStore.ensure_seed_account` auto-registers the `user` / `password` account only when the `users` table is completely empty, so a fresh install remains zero-config without interfering with real registrations.
 
+`POST /api/auth/password` (`BoardStore.change_password`) lets an authenticated user change their own password: it re-verifies `current_password` against the stored hash inside the same transaction that writes the new one (closing the check-then-update race, however unlikely in a single-instance local app), and raises `IncorrectPasswordError` (mapped to HTTP 400, not 401, so it isn't mistaken for a session-expiry by the frontend's global 401-means-log-out handling) if it doesn't match. There is no password-reset flow (no email delivery mechanism exists in this local-first app) — losing a password means losing the account.
+
 Timestamps, roles, soft deletes, and chat tables are omitted because no current behavior needs them.
 
 ## Card due dates
