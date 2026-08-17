@@ -34,6 +34,7 @@ def structured_response(payload: dict[str, Any]) -> str:
                     "title": "AI single card",
                     "details": "Created through the assistant",
                     "due_date": "",
+                    "labels": "",
                 }
             ],
         }
@@ -51,6 +52,7 @@ def structured_response(payload: dict[str, Any]) -> str:
                     "title": "AI batch card",
                     "details": "Created in a multi-change request",
                     "due_date": "2026-12-31",
+                    "labels": "ai,batch",
                 },
                 {
                     "type": "edit_card",
@@ -58,6 +60,7 @@ def structured_response(payload: dict[str, Any]) -> str:
                     "title": "AI edited card",
                     "details": None,
                     "due_date": None,
+                    "labels": None,
                 },
                 {
                     "type": "move_card",

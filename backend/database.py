@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS cards (
     title TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT '',
     due_date TEXT NOT NULL DEFAULT '',
+    labels TEXT NOT NULL DEFAULT '',
     position INTEGER NOT NULL,
     UNIQUE (column_id, position),
     CHECK (length(trim(title)) > 0),
@@ -164,6 +165,10 @@ class BoardStore:
         if "due_date" not in card_columns:
             connection.execute(
                 "ALTER TABLE cards ADD COLUMN due_date TEXT NOT NULL DEFAULT ''"
+            )
+        if "labels" not in card_columns:
+            connection.execute(
+                "ALTER TABLE cards ADD COLUMN labels TEXT NOT NULL DEFAULT ''"
             )
 
     def init_schema(self) -> None:
@@ -328,13 +333,20 @@ class BoardStore:
         title: str,
         details: str,
         due_date: str = "",
+        labels: str = "",
     ) -> dict[str, Any]:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
             owned_board_id = self._owned_board_id(connection, username, board_id)
             self._create_card(
-                connection, owned_board_id, column_id, title, details, due_date
+                connection,
+                owned_board_id,
+                column_id,
+                title,
+                details,
+                due_date,
+                labels,
             )
             connection.commit()
             return self._load_board(connection, username, owned_board_id)
@@ -353,6 +365,7 @@ class BoardStore:
         title: str | None,
         details: str | None,
         due_date: str | None = None,
+        labels: str | None = None,
     ) -> dict[str, Any]:
         connection = self._connect()
         try:
@@ -365,6 +378,7 @@ class BoardStore:
                 title=title,
                 details=details,
                 due_date=due_date,
+                labels=labels,
             )
             connection.commit()
             return self._load_board(connection, username, owned_board_id)
@@ -444,6 +458,7 @@ class BoardStore:
                             operation["title"],
                             operation["details"],
                             operation.get("due_date", ""),
+                            operation.get("labels", ""),
                         )
                     case "edit_card":
                         self._update_card(
@@ -453,6 +468,7 @@ class BoardStore:
                             title=operation["title"],
                             details=operation["details"],
                             due_date=operation.get("due_date"),
+                            labels=operation.get("labels"),
                         )
                     case "move_card":
                         self._move_card(
@@ -535,6 +551,7 @@ class BoardStore:
         title: str,
         details: str,
         due_date: str = "",
+        labels: str = "",
     ) -> None:
         cls._require_column(connection, board_id, column_id)
         position = connection.execute(
@@ -547,10 +564,11 @@ class BoardStore:
         ).fetchone()[0]
         connection.execute(
             """
-            INSERT INTO cards (board_id, column_id, title, details, due_date, position)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO cards (
+                board_id, column_id, title, details, due_date, labels, position
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (board_id, column_id, title, details, due_date, position),
+            (board_id, column_id, title, details, due_date, labels, position),
         )
 
     @classmethod
@@ -563,9 +581,12 @@ class BoardStore:
         title: str | None,
         details: str | None,
         due_date: str | None = None,
+        labels: str | None = None,
     ) -> None:
-        if title is None and details is None and due_date is None:
-            raise ValueError("An update must change the title, details, or due date")
+        if title is None and details is None and due_date is None and labels is None:
+            raise ValueError(
+                "An update must change the title, details, due date, or labels"
+            )
         cls._require_card(connection, board_id, card_id)
         assignments: list[str] = []
         values: list[str | int] = []
@@ -578,6 +599,9 @@ class BoardStore:
         if due_date is not None:
             assignments.append("due_date = ?")
             values.append(due_date)
+        if labels is not None:
+            assignments.append("labels = ?")
+            values.append(labels)
         values.extend((card_id, board_id))
         connection.execute(
             f"UPDATE cards SET {', '.join(assignments)} WHERE id = ? AND board_id = ?",
@@ -772,7 +796,7 @@ class BoardStore:
         columns_by_id = {column["id"]: column for column in columns}
         for row in connection.execute(
             """
-            SELECT id, column_id, title, details, due_date, position
+            SELECT id, column_id, title, details, due_date, labels, position
             FROM cards
             WHERE board_id = ?
             ORDER BY column_id, position, id
@@ -785,6 +809,7 @@ class BoardStore:
                     "title": row["title"],
                     "details": row["details"],
                     "due_date": row["due_date"],
+                    "labels": row["labels"],
                     "position": row["position"],
                 }
             )

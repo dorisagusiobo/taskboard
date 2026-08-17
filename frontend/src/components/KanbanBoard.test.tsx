@@ -81,6 +81,7 @@ describe("KanbanBoard", () => {
       title: "New card",
       details: "Notes",
       due_date: "",
+      labels: "",
       position: 2,
     });
     const edited = structuredClone(added);
@@ -134,6 +135,7 @@ describe("KanbanBoard", () => {
       title: "No notes",
       details: "",
       due_date: "",
+      labels: "",
       position: 2,
     });
     fetchMock
@@ -203,6 +205,7 @@ describe("KanbanBoard", () => {
       title: "Only once",
       details: "",
       due_date: "",
+      labels: "",
       position: 2,
     });
     fetchMock
@@ -233,6 +236,7 @@ describe("KanbanBoard", () => {
       title: "Created by AI",
       details: "Canonical response",
       due_date: "",
+      labels: "",
       position: 0,
     });
     fetchMock

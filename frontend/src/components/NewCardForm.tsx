@@ -1,11 +1,17 @@
 import { useState, type FormEvent } from "react";
 import { PlusIcon } from "@/components/icons";
+import { parseLabels } from "@/lib/kanban";
 
-const initialFormState = { title: "", details: "", dueDate: "" };
+const initialFormState = { title: "", details: "", dueDate: "", labels: "" };
 
 type NewCardFormProps = {
   isDisabled: boolean;
-  onAdd: (title: string, details: string, dueDate: string) => Promise<boolean>;
+  onAdd: (
+    title: string,
+    details: string,
+    dueDate: string,
+    labels: string[]
+  ) => Promise<boolean>;
 };
 
 export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
@@ -23,7 +29,8 @@ export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
     const saved = await onAdd(
       formState.title.trim(),
       formState.details.trim(),
-      formState.dueDate
+      formState.dueDate,
+      parseLabels(formState.labels)
     );
     if (saved) {
       setFormState(initialFormState);
@@ -75,6 +82,23 @@ export const NewCardForm = ({ isDisabled, onAdd }: NewCardFormProps) => {
                 }))
               }
               disabled={isBusy}
+              className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+            Labels
+            <input
+              value={formState.labels}
+              aria-label="New card labels"
+              onChange={(event) =>
+                setFormState((prev) => ({
+                  ...prev,
+                  labels: event.target.value,
+                }))
+              }
+              disabled={isBusy}
+              maxLength={200}
+              placeholder="bug, urgent"
               className="mt-1 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
             />
           </label>

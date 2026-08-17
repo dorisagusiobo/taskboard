@@ -203,6 +203,67 @@ def test_card_due_date_rejects_invalid_formats(
     assert response.status_code == 422
 
 
+def test_card_labels_can_be_set_deduped_and_cleared(
+    authenticated_client: TestClient, board_id: int
+):
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
+    column_id = board["columns"][0]["id"]
+
+    created_response = authenticated_client.post(
+        f"/api/boards/{board_id}/cards",
+        json={
+            "column_id": column_id,
+            "title": "Labeled card",
+            "labels": " bug, Urgent ,bug ",
+        },
+    )
+    assert created_response.status_code == 201
+    _, created = find_card(created_response.json(), "Labeled card")
+    assert created["labels"] == "bug,Urgent"
+
+    updated_response = authenticated_client.patch(
+        f"/api/boards/{board_id}/cards/{created['id']}",
+        json={"labels": "design"},
+    )
+    assert updated_response.status_code == 200
+    _, updated = find_card(updated_response.json(), "Labeled card")
+    assert updated["labels"] == "design"
+
+    cleared_response = authenticated_client.patch(
+        f"/api/boards/{board_id}/cards/{created['id']}", json={"labels": ""}
+    )
+    assert cleared_response.status_code == 200
+    _, cleared = find_card(cleared_response.json(), "Labeled card")
+    assert cleared["labels"] == ""
+
+
+def test_card_labels_reject_too_many_or_too_long(
+    authenticated_client: TestClient, board_id: int
+):
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
+    column_id = board["columns"][0]["id"]
+
+    too_many = authenticated_client.post(
+        f"/api/boards/{board_id}/cards",
+        json={
+            "column_id": column_id,
+            "title": "Too many labels",
+            "labels": "a,b,c,d,e,f",
+        },
+    )
+    assert too_many.status_code == 422
+
+    too_long = authenticated_client.post(
+        f"/api/boards/{board_id}/cards",
+        json={
+            "column_id": column_id,
+            "title": "Long label",
+            "labels": "x" * 25,
+        },
+    )
+    assert too_long.status_code == 422
+
+
 def test_reorders_and_moves_cards_transactionally(
     authenticated_client: TestClient, database_path: Path, board_id: int
 ):

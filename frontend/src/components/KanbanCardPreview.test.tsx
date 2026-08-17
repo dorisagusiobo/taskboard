@@ -10,6 +10,7 @@ describe("KanbanCardPreview", () => {
           title: "Preview title",
           details: "Preview details",
           dueDate: "",
+          labels: [],
         }}
       />
     );

@@ -62,6 +62,7 @@ CREATE TABLE cards (
     title TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT '',
     due_date TEXT NOT NULL DEFAULT '',
+    labels TEXT NOT NULL DEFAULT '',
     position INTEGER NOT NULL,
     UNIQUE (column_id, position),
     CHECK (length(trim(title)) > 0),
@@ -83,6 +84,10 @@ Timestamps, roles, soft deletes, and chat tables are omitted because no current 
 
 `cards.due_date` stores an empty string (no due date) or a `YYYY-MM-DD` string — never `NULL`, matching the `details` column's "empty means unset" convention rather than a nullable-column convention. Validated in two independent places that must stay in sync: `main.py`'s `CardDueDate` type for manual API requests, and `ai_service.py`'s `CardDueDate` type for AI operations (each calls `date.fromisoformat` to reject invalid calendar dates, not just the right shape). On `PATCH .../cards/{card_id}`, `due_date: null` (the request default) leaves it unchanged, `due_date: ""` clears it, and anything else must be a valid date — this mirrors how `title`/`details` already distinguish "not sent" from "sent empty." The frontend computes overdue status purely from `due_date < today` (`frontend/src/lib/kanban.ts`'s `isOverdue`); there is no separate "done" flag, so a card sitting in the Done column with a past due date still shows as overdue.
 
+## Card labels
+
+`cards.labels` stores a comma-separated string of short tags (at most 5, 24 characters each) or an empty string for none — same "empty means unset, never NULL" convention as `due_date`, validated the same independently-duplicated way in `main.py` and `ai_service.py` (`CardLabels`/`_validate_labels`: trims each label, drops empties from stray commas, deduplicates case-insensitively, then rejoins with `,`). `PATCH .../cards/{card_id}` treats `labels` the same as `due_date`: `null` leaves it unchanged, `""` clears it, anything else replaces the full list — there's no API for adding or removing a single label. The frontend (`frontend/src/lib/kanban.ts`'s `parseLabels`/`formatLabels`) converts between this wire string and a `string[]` for display; `labelAccent` picks one of 3 fixed palette colors per label via a deterministic string hash, purely a display concern with nothing stored server-side.
+
 ## Ownership guarantees
 
 API access starts with the username stored in the signed session. Every board-scoped route also takes a `{board_id}` path parameter, which `BoardStore._owned_board_id` re-validates against that session's boards on every call — a board ID that exists but belongs to someone else 404s exactly like one that doesn't exist at all. The client never selects a `user_id`, and a `board_id` it supplies is only ever used to look up a row it's proven to own.
@@ -93,7 +98,7 @@ Deleting a user cascades through all of their boards, columns, and cards. Deleti
 
 ## Initialization
 
-On startup, `BoardStore.init_schema()` creates the schema when missing (including `ALTER TABLE` fallbacks that add `users.password_hash` and `cards.due_date` to pre-existing tables, so upgrading in place doesn't crash), then `BoardStore.ensure_seed_account("user", "password")` registers the zero-config seed account only if the `users` table is completely empty.
+On startup, `BoardStore.init_schema()` creates the schema when missing (including `ALTER TABLE` fallbacks that add `users.password_hash`, `cards.due_date`, and `cards.labels` to pre-existing tables, so upgrading in place doesn't crash), then `BoardStore.ensure_seed_account("user", "password")` registers the zero-config seed account only if the `users` table is completely empty.
 
 Beyond startup, `BoardStore.register_user(username, password)` is the only way a *user* gets created: it hashes the password, inserts the user row, and seeds their first board — five columns plus the eight demo cards from `database-schema.json` — all in one transaction. It raises `UsernameTakenError` for an existing username rather than silently reusing it. `BoardStore.create_board(username, name)` creates any subsequent board for an existing user: five fixed columns, no demo cards (those are onboarding content for the very first board only). Tests use a temporary `DATABASE_PATH`, never the developer database.
 

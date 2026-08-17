@@ -74,6 +74,37 @@ CardDueDate = Annotated[
     StringConstraints(strip_whitespace=True, max_length=10),
     AfterValidator(_validate_due_date),
 ]
+
+MAX_LABELS_PER_CARD = 5
+MAX_LABEL_LENGTH = 24
+
+
+def _validate_labels(value: str) -> str:
+    if value == "":
+        return value
+    labels = [label.strip() for label in value.split(",") if label.strip()]
+    if len(labels) > MAX_LABELS_PER_CARD:
+        raise ValueError(f"A card may have at most {MAX_LABELS_PER_CARD} labels")
+    for label in labels:
+        if len(label) > MAX_LABEL_LENGTH:
+            raise ValueError(
+                f"Each label must be {MAX_LABEL_LENGTH} characters or fewer"
+            )
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for label in labels:
+        key = label.lower()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(label)
+    return ",".join(deduped)
+
+
+CardLabels = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=200),
+    AfterValidator(_validate_labels),
+]
 Username = Annotated[
     str,
     StringConstraints(
@@ -105,6 +136,7 @@ class CardResponse(BaseModel):
     title: str
     details: str
     due_date: str
+    labels: str
     position: int
 
 
@@ -144,17 +176,24 @@ class CreateCardRequest(BaseModel):
     title: CardTitle
     details: CardDetails = ""
     due_date: CardDueDate = ""
+    labels: CardLabels = ""
 
 
 class UpdateCardRequest(BaseModel):
     title: CardTitle | None = None
     details: CardDetails | None = None
     due_date: CardDueDate | None = None
+    labels: CardLabels | None = None
 
     @model_validator(mode="after")
     def require_a_change(self) -> Self:
-        if self.title is None and self.details is None and self.due_date is None:
-            raise ValueError("Provide a title, details, or due date")
+        if (
+            self.title is None
+            and self.details is None
+            and self.due_date is None
+            and self.labels is None
+        ):
+            raise ValueError("Provide a title, details, due date, or labels")
         return self
 
 
@@ -322,6 +361,7 @@ def create_app(
             payload.title,
             payload.details,
             payload.due_date,
+            payload.labels,
         )
 
     @app.patch("/api/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)
@@ -335,6 +375,7 @@ def create_app(
             title=payload.title,
             details=payload.details,
             due_date=payload.due_date,
+            labels=payload.labels,
         )
 
     @app.delete("/api/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)

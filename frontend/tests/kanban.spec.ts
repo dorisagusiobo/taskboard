@@ -328,6 +328,47 @@ test("sets, edits, and clears a card's due date", async ({ page }) => {
   await expect(card.getByText(/^Overdue /)).toHaveCount(0);
 });
 
+test("sets, edits, and clears a card's labels", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Tagged card");
+  await firstColumn.getByLabel("New card labels").fill("bug, urgent");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
+    firstColumn.getByRole("button", { name: "Add card" }).click(),
+  ]);
+
+  const cardByText = firstColumn
+    .locator('[data-testid^="card-"]')
+    .filter({ hasText: "Tagged card" });
+  await expect(cardByText.getByText("bug")).toBeVisible();
+  await expect(cardByText.getByText("urgent")).toBeVisible();
+  const cardId = await cardByText.getAttribute("data-testid");
+  if (!cardId) {
+    throw new Error("Created card did not have a stable test id.");
+  }
+  const card = page.getByTestId(cardId);
+
+  await card.getByLabel("Edit Tagged card").click();
+  await card.getByLabel("Labels").fill("design");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards\/\d+$/, "PATCH"),
+    card.getByRole("button", { name: "Save card" }).click(),
+  ]);
+  await expect(card.getByText("design")).toBeVisible();
+  await expect(card.getByText("bug")).toHaveCount(0);
+
+  await card.getByLabel("Edit Tagged card").click();
+  await card.getByLabel("Labels").fill("");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards\/\d+$/, "PATCH"),
+    card.getByRole("button", { name: "Save card" }).click(),
+  ]);
+  await expect(card.getByText("design")).toHaveCount(0);
+});
+
 test("uses AI through FastAPI and preserves validated changes", async ({ page }) => {
   await login(page);
   const firstColumn = page.locator('[data-testid^="column-"]').first();
@@ -375,6 +416,8 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
     .locator('[data-testid^="card-"]')
     .filter({ hasText: "AI batch card" });
   await expect(aiBatchCard.getByText(/^Due /)).toBeVisible();
+  await expect(aiBatchCard.getByText("ai", { exact: true })).toBeVisible();
+  await expect(aiBatchCard.getByText("batch", { exact: true })).toBeVisible();
 
   await message.fill("Return a malformed response");
   const malformedResponse = page.waitForResponse(

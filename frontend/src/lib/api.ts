@@ -1,4 +1,4 @@
-import type { BoardData, Card, Column } from "@/lib/kanban";
+import { formatLabels, parseLabels, type BoardData, type Card, type Column } from "@/lib/kanban";
 
 export type Session = {
   username: string;
@@ -14,8 +14,9 @@ export type AIChatResult = {
   board: ApiBoard | null;
 };
 
-type ApiCard = Omit<Card, "dueDate"> & {
+type ApiCard = Omit<Card, "dueDate" | "labels"> & {
   due_date: string;
+  labels: string;
   position: number;
 };
 
@@ -122,7 +123,8 @@ export const createCard = (
   columnId: number,
   title: string,
   details: string,
-  dueDate: string = ""
+  dueDate: string = "",
+  labels: string[] = []
 ) =>
   request<ApiBoard>(
     `/api/boards/${boardId}/cards`,
@@ -131,6 +133,7 @@ export const createCard = (
       title,
       details,
       due_date: dueDate,
+      labels: formatLabels(labels),
     })
   );
 
@@ -139,11 +142,17 @@ export const updateCard = (
   cardId: number,
   title: string,
   details: string,
-  dueDate?: string
+  dueDate?: string,
+  labels?: string[]
 ) =>
   request<ApiBoard>(
     `/api/boards/${boardId}/cards/${cardId}`,
-    jsonOptions("PATCH", { title, details, due_date: dueDate ?? null })
+    jsonOptions("PATCH", {
+      title,
+      details,
+      due_date: dueDate ?? null,
+      labels: labels === undefined ? null : formatLabels(labels),
+    })
   );
 
 export const deleteCard = (boardId: number, cardId: number) =>
@@ -182,6 +191,7 @@ export const toBoardData = (board: ApiBoard): BoardData => {
           title: card.title,
           details: card.details,
           dueDate: card.due_date,
+          labels: parseLabels(card.labels),
         },
       ])
     )

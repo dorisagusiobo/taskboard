@@ -36,6 +36,37 @@ CardDueDate = Annotated[
     AfterValidator(_validate_due_date),
 ]
 
+MAX_LABELS_PER_CARD = 5
+MAX_LABEL_LENGTH = 24
+
+
+def _validate_labels(value: str) -> str:
+    if value == "":
+        return value
+    labels = [label.strip() for label in value.split(",") if label.strip()]
+    if len(labels) > MAX_LABELS_PER_CARD:
+        raise ValueError(f"A card may have at most {MAX_LABELS_PER_CARD} labels")
+    for label in labels:
+        if len(label) > MAX_LABEL_LENGTH:
+            raise ValueError(
+                f"Each label must be {MAX_LABEL_LENGTH} characters or fewer"
+            )
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for label in labels:
+        key = label.lower()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(label)
+    return ",".join(deduped)
+
+
+CardLabels = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=200),
+    AfterValidator(_validate_labels),
+]
+
 
 class ConversationMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -59,6 +90,7 @@ class CreateCardOperation(BaseModel):
     title: CardTitle
     details: CardDetails
     due_date: CardDueDate
+    labels: CardLabels
 
 
 class EditCardOperation(BaseModel):
@@ -69,10 +101,18 @@ class EditCardOperation(BaseModel):
     title: CardTitle | None
     details: CardDetails | None
     due_date: CardDueDate | None
+    labels: CardLabels | None
 
     def model_post_init(self, _context: Any) -> None:
-        if self.title is None and self.details is None and self.due_date is None:
-            raise ValueError("An edit must change the title, details, or due date")
+        if (
+            self.title is None
+            and self.details is None
+            and self.due_date is None
+            and self.labels is None
+        ):
+            raise ValueError(
+                "An edit must change the title, details, due date, or labels"
+            )
 
 
 class MoveCardOperation(BaseModel):
@@ -133,6 +173,14 @@ AI_RESPONSE_SCHEMA: dict[str, Any] = {
                                 ),
                                 "maxLength": 10,
                             },
+                            "labels": {
+                                "type": "string",
+                                "description": (
+                                    "Comma-separated labels, empty string for none, "
+                                    "at most 5 labels of 24 characters each."
+                                ),
+                                "maxLength": 200,
+                            },
                         },
                         "required": [
                             "type",
@@ -140,6 +188,7 @@ AI_RESPONSE_SCHEMA: dict[str, Any] = {
                             "title",
                             "details",
                             "due_date",
+                            "labels",
                         ],
                     },
                     {
@@ -174,8 +223,25 @@ AI_RESPONSE_SCHEMA: dict[str, Any] = {
                                     "it unchanged, otherwise YYYY-MM-DD."
                                 ),
                             },
+                            "labels": {
+                                "anyOf": [
+                                    {"type": "string", "maxLength": 200},
+                                    {"type": "null"},
+                                ],
+                                "description": (
+                                    "Empty string clears the labels, null leaves "
+                                    "them unchanged, otherwise a comma-separated list."
+                                ),
+                            },
                         },
-                        "required": ["type", "card_id", "title", "details", "due_date"],
+                        "required": [
+                            "type",
+                            "card_id",
+                            "title",
+                            "details",
+                            "due_date",
+                            "labels",
+                        ],
                     },
                     {
                         "type": "object",
@@ -206,6 +272,12 @@ Cards may carry a due_date. Use an empty string for no due date, otherwise
 YYYY-MM-DD. Today's date is {today}, so resolve relative dates ("tomorrow",
 "next Friday", "in two weeks") against it. For edit_card, an empty string
 clears the due date and null leaves it unchanged.
+
+Cards may carry labels: a comma-separated string of short tags (at most 5,
+24 characters each), e.g. "bug,urgent". Use an empty string for no labels.
+For edit_card, an empty string clears the labels and null leaves them
+unchanged; there is no way to add or remove a single label without
+restating the full list.
 
 Canonical board JSON:
 """

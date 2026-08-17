@@ -119,6 +119,7 @@ def test_ai_chat_applies_multiple_operations_and_returns_canonical_board(
                     "title": "AI card",
                     "details": "AI details",
                     "due_date": "",
+                    "labels": "",
                 },
                 {
                     "type": "edit_card",
@@ -126,6 +127,7 @@ def test_ai_chat_applies_multiple_operations_and_returns_canonical_board(
                     "title": "AI edit",
                     "details": None,
                     "due_date": None,
+                    "labels": None,
                 },
                 {
                     "type": "move_card",
@@ -173,6 +175,7 @@ def test_ai_chat_rolls_back_all_operations_for_a_stale_id(
                     "title": "Must roll back",
                     "details": None,
                     "due_date": None,
+                    "labels": None,
                 },
                 {
                     "type": "move_card",
@@ -215,6 +218,7 @@ def test_ai_chat_cannot_mutate_another_users_board(
                     "title": "Stolen",
                     "details": None,
                     "due_date": None,
+                    "labels": None,
                 }
             ],
         }

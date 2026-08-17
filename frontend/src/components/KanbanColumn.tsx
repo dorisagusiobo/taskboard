@@ -16,13 +16,15 @@ type KanbanColumnProps = {
     columnId: number,
     title: string,
     details: string,
-    dueDate: string
+    dueDate: string,
+    labels: string[]
   ) => Promise<boolean>;
   onEditCard: (
     cardId: number,
     title: string,
     details: string,
-    dueDate: string
+    dueDate: string,
+    labels: string[]
   ) => Promise<boolean>;
   onDeleteCard: (cardId: number) => Promise<boolean>;
 };
@@ -100,7 +102,7 @@ export const KanbanColumn = ({
         <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
           {cards.map((card) => (
             <KanbanCard
-              key={`${card.id}:${card.title}:${card.details}:${card.dueDate}`}
+              key={`${card.id}:${card.title}:${card.details}:${card.dueDate}:${card.labels.join(",")}`}
               card={card}
               isDisabled={isDisabled}
               onEdit={onEditCard}
@@ -116,8 +118,8 @@ export const KanbanColumn = ({
       </div>
       <NewCardForm
         isDisabled={isDisabled}
-        onAdd={(title, details, dueDate) =>
-          onAddCard(column.id, title, details, dueDate)
+        onAdd={(title, details, dueDate, labels) =>
+          onAddCard(column.id, title, details, dueDate, labels)
         }
       />
     </section>

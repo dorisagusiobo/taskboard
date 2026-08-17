@@ -14,6 +14,7 @@ export const apiBoard: ApiBoard = {
           title: "Server card",
           details: "Loaded from SQLite",
           due_date: "",
+          labels: "",
           position: 0,
         },
         {
@@ -21,6 +22,7 @@ export const apiBoard: ApiBoard = {
           title: "Second card",
           details: "Another persisted card",
           due_date: "",
+          labels: "",
           position: 1,
         },
       ],

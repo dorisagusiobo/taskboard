@@ -3,6 +3,7 @@ export type Card = {
   title: string;
   details: string;
   dueDate: string;
+  labels: string[];
 };
 
 export type Column = {
@@ -22,6 +23,26 @@ export const isOverdue = (
   dueDate: string,
   today: string = new Date().toISOString().slice(0, 10)
 ): boolean => dueDate !== "" && dueDate < today;
+
+export const parseLabels = (labels: string): string[] =>
+  labels === ""
+    ? []
+    : labels
+        .split(",")
+        .map((label) => label.trim())
+        .filter((label) => label !== "");
+
+export const formatLabels = (labels: string[]): string => labels.join(",");
+
+const LABEL_ACCENT_COUNT = 3;
+
+export const labelAccent = (label: string): number => {
+  let hash = 0;
+  for (let index = 0; index < label.length; index += 1) {
+    hash = (hash * 31 + label.charCodeAt(index)) & 0xffffffff;
+  }
+  return Math.abs(hash) % LABEL_ACCENT_COUNT;
+};
 
 const isColumnId = (columns: Column[], id: number) =>
   columns.some((column) => column.id === id);

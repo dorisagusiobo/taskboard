@@ -183,6 +183,13 @@
           "description": "Empty string means no due date, otherwise YYYY-MM-DD. Never NULL."
         },
         {
+          "name": "labels",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "",
+          "description": "Comma-separated tags (at most 5, 24 chars each), empty string for none. Never NULL."
+        },
+        {
           "name": "position",
           "type": "INTEGER",
           "nullable": false
@@ -292,7 +299,8 @@
     "The authenticated session determines the user; clients never submit a user_id, and a client-supplied board_id is only ever used to look up a row already proven to belong to that session's user.",
     "Registering an already-taken username is rejected (HTTP 409); it never overwrites the existing account's password or boards.",
     "A user always owns at least one board: DELETE /api/boards/{board_id} is rejected (HTTP 409, LastBoardError) when it is the user's only remaining board.",
-    "cards.due_date is empty string or YYYY-MM-DD, never NULL; an update's due_date field being absent/null leaves it unchanged while an explicit empty string clears it."
+    "cards.due_date is empty string or YYYY-MM-DD, never NULL; an update's due_date field being absent/null leaves it unchanged while an explicit empty string clears it.",
+    "cards.labels is a comma-separated string of at most 5 labels (24 chars each), never NULL; an update's labels field follows the same absent/null-means-unchanged, empty-string-means-clear convention as due_date, and always replaces the full list rather than adding or removing one label."
   ],
   "conversation_history": {
     "persistence": "none",

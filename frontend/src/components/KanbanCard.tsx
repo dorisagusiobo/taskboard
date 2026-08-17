@@ -9,7 +9,13 @@ import {
   SpinnerIcon,
   TrashIcon,
 } from "@/components/icons";
-import { isOverdue, type Card } from "@/lib/kanban";
+import {
+  formatLabels,
+  isOverdue,
+  labelAccent,
+  parseLabels,
+  type Card,
+} from "@/lib/kanban";
 
 type KanbanCardProps = {
   card: Card;
@@ -18,7 +24,8 @@ type KanbanCardProps = {
     cardId: number,
     title: string,
     details: string,
-    dueDate: string
+    dueDate: string,
+    labels: string[]
   ) => Promise<boolean>;
   onDelete: (cardId: number) => Promise<boolean>;
 };
@@ -30,6 +37,12 @@ const formatDueDate = (dueDate: string) => {
     day: "numeric",
   });
 };
+
+const LABEL_ACCENT_CLASSES = [
+  "bg-[var(--accent-yellow)]/15 text-[var(--navy-dark)]",
+  "bg-[var(--primary-blue)]/15 text-[var(--primary-blue)]",
+  "bg-[var(--secondary-purple)]/15 text-[var(--secondary-purple)]",
+];
 
 export const KanbanCard = ({
   card,
@@ -43,6 +56,7 @@ export const KanbanCard = ({
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
   const [dueDate, setDueDate] = useState(card.dueDate);
+  const [labels, setLabels] = useState(formatLabels(card.labels));
   const {
     attributes,
     listeners,
@@ -67,7 +81,13 @@ export const KanbanCard = ({
     }
 
     setIsSaving(true);
-    const saved = await onEdit(card.id, nextTitle, details.trim(), dueDate);
+    const saved = await onEdit(
+      card.id,
+      nextTitle,
+      details.trim(),
+      dueDate,
+      parseLabels(labels)
+    );
     if (saved) {
       setIsEditing(false);
     }
@@ -128,6 +148,17 @@ export const KanbanCard = ({
               className="mt-1 w-full rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)] disabled:opacity-60"
             />
           </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+            Labels
+            <input
+              value={labels}
+              onChange={(event) => setLabels(event.target.value)}
+              disabled={isBusy}
+              maxLength={200}
+              placeholder="bug, urgent"
+              className="mt-1 w-full rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)] disabled:opacity-60"
+            />
+          </label>
           <div className="flex flex-wrap gap-2">
             <button
               type="submit"
@@ -143,6 +174,7 @@ export const KanbanCard = ({
                 setTitle(card.title);
                 setDetails(card.details);
                 setDueDate(card.dueDate);
+                setLabels(formatLabels(card.labels));
                 setIsEditing(false);
               }}
               className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)] disabled:opacity-60"
@@ -154,6 +186,21 @@ export const KanbanCard = ({
       ) : (
         <div className="space-y-3">
           <div>
+            {card.labels.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-1">
+                {card.labels.map((label) => (
+                  <span
+                    key={label}
+                    className={clsx(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      LABEL_ACCENT_CLASSES[labelAccent(label)]
+                    )}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <h4 className="font-display text-base font-semibold text-[var(--navy-dark)]">
               {card.title}
             </h4>

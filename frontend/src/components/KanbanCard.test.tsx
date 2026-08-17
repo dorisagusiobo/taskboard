@@ -8,6 +8,7 @@ const baseCard: Card = {
   title: "Ship the release",
   details: "Final checks",
   dueDate: "",
+  labels: [],
 };
 
 describe("KanbanCard", () => {
@@ -68,7 +69,8 @@ describe("KanbanCard", () => {
       1,
       "Ship the release",
       "Final checks",
-      "2026-06-15"
+      "2026-06-15",
+      []
     );
   });
 
@@ -90,5 +92,66 @@ describe("KanbanCard", () => {
 
     await user.click(screen.getByLabelText("Edit Ship the release"));
     expect(screen.getByLabelText("Due date")).toHaveValue("2026-01-01");
+  });
+
+  it("shows no label chips when the card has none", () => {
+    render(
+      <KanbanCard card={baseCard} isDisabled={false} onEdit={vi.fn()} onDelete={vi.fn()} />
+    );
+
+    expect(screen.queryByText("bug")).not.toBeInTheDocument();
+  });
+
+  it("shows a chip per label", () => {
+    render(
+      <KanbanCard
+        card={{ ...baseCard, labels: ["bug", "urgent"] }}
+        isDisabled={false}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("bug")).toBeVisible();
+    expect(screen.getByText("urgent")).toBeVisible();
+  });
+
+  it("edits labels and calls onEdit with the parsed list", async () => {
+    const onEdit = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup();
+    render(
+      <KanbanCard card={baseCard} isDisabled={false} onEdit={onEdit} onDelete={vi.fn()} />
+    );
+
+    await user.click(screen.getByLabelText("Edit Ship the release"));
+    await user.type(screen.getByLabelText("Labels"), "bug, urgent");
+    await user.click(screen.getByRole("button", { name: "Save card" }));
+
+    expect(onEdit).toHaveBeenCalledWith(
+      1,
+      "Ship the release",
+      "Final checks",
+      "",
+      ["bug", "urgent"]
+    );
+  });
+
+  it("resets the labels draft on cancel", async () => {
+    const user = userEvent.setup();
+    render(
+      <KanbanCard
+        card={{ ...baseCard, labels: ["design"] }}
+        isDisabled={false}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("Edit Ship the release"));
+    await user.clear(screen.getByLabelText("Labels"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByLabelText("Edit Ship the release"));
+    expect(screen.getByLabelText("Labels")).toHaveValue("design");
   });
 });

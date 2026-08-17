@@ -39,6 +39,7 @@ describe("API client", () => {
       title: "Server card",
       details: "Loaded from SQLite",
       dueDate: "",
+      labels: [],
     });
   });
 
@@ -58,10 +59,10 @@ describe("API client", () => {
     );
   });
 
-  it("sends the due date on create and defaults it to empty", async () => {
+  it("sends the due date and labels on create, defaulting both to empty", async () => {
     fetchMock.mockResolvedValueOnce(response(201, cloneBoard()));
 
-    await createCard(1, 10, "New card", "Notes", "2026-02-01");
+    await createCard(1, 10, "New card", "Notes", "2026-02-01", ["bug", "urgent"]);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/boards/1/cards",
@@ -72,6 +73,7 @@ describe("API client", () => {
           title: "New card",
           details: "Notes",
           due_date: "2026-02-01",
+          labels: "bug,urgent",
         }),
       })
     );
@@ -86,12 +88,13 @@ describe("API client", () => {
           title: "No date card",
           details: "Notes",
           due_date: "",
+          labels: "",
         }),
       })
     );
   });
 
-  it("only sends a due date update when one is explicitly provided", async () => {
+  it("only sends a due date or labels update when explicitly provided", async () => {
     fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
 
     await updateCard(1, 101, "Title", "Details");
@@ -104,12 +107,13 @@ describe("API client", () => {
           title: "Title",
           details: "Details",
           due_date: null,
+          labels: null,
         }),
       })
     );
 
     fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
-    await updateCard(1, 101, "Title", "Details", "");
+    await updateCard(1, 101, "Title", "Details", "", ["design"]);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/boards/1/cards/101",
       expect.objectContaining({
@@ -117,6 +121,7 @@ describe("API client", () => {
           title: "Title",
           details: "Details",
           due_date: "",
+          labels: "design",
         }),
       })
     );

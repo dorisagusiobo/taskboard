@@ -1,4 +1,11 @@
-import { isOverdue, moveCard, type Column } from "@/lib/kanban";
+import {
+  formatLabels,
+  isOverdue,
+  labelAccent,
+  moveCard,
+  parseLabels,
+  type Column,
+} from "@/lib/kanban";
 
 describe("isOverdue", () => {
   it("is false when there is no due date", () => {
@@ -12,6 +19,47 @@ describe("isOverdue", () => {
 
   it("is true for a due date in the past", () => {
     expect(isOverdue("2026-01-14", "2026-01-15")).toBe(true);
+  });
+});
+
+describe("parseLabels / formatLabels", () => {
+  it("round-trips an empty string as an empty array", () => {
+    expect(parseLabels("")).toEqual([]);
+    expect(formatLabels([])).toBe("");
+  });
+
+  it("splits and joins comma-separated labels", () => {
+    expect(parseLabels("bug,urgent")).toEqual(["bug", "urgent"]);
+    expect(formatLabels(["bug", "urgent"])).toBe("bug,urgent");
+  });
+
+  it("trims whitespace around each label and drops empties from stray commas", () => {
+    expect(parseLabels("bug, urgent ,, design")).toEqual([
+      "bug",
+      "urgent",
+      "design",
+    ]);
+  });
+});
+
+describe("labelAccent", () => {
+  it("is deterministic for the same label", () => {
+    expect(labelAccent("bug")).toBe(labelAccent("bug"));
+  });
+
+  it("stays within the accent palette range", () => {
+    for (const label of ["bug", "urgent", "design", "backend", ""]) {
+      const accent = labelAccent(label);
+      expect(accent).toBeGreaterThanOrEqual(0);
+      expect(accent).toBeLessThan(3);
+    }
+  });
+
+  it("can distinguish different labels", () => {
+    const accents = new Set(
+      ["bug", "urgent", "design", "backend", "frontend"].map(labelAccent)
+    );
+    expect(accents.size).toBeGreaterThan(1);
   });
 });
 

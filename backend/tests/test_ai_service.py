@@ -71,6 +71,7 @@ def test_service_requests_schema_and_parses_all_supported_operations():
                     "title": "New card",
                     "details": "Details",
                     "due_date": "2026-05-01",
+                    "labels": "bug,urgent",
                 },
                 {
                     "type": "edit_card",
@@ -78,6 +79,7 @@ def test_service_requests_schema_and_parses_all_supported_operations():
                     "title": None,
                     "details": "Changed",
                     "due_date": None,
+                    "labels": None,
                 },
                 {
                     "type": "move_card",
@@ -134,6 +136,7 @@ def test_service_parses_a_no_change_reply():
                         "title": None,
                         "details": None,
                         "due_date": None,
+                        "labels": None,
                     }
                 ],
             }
@@ -159,6 +162,7 @@ def test_service_rejects_an_operation_with_an_invalid_due_date():
                     "title": "New card",
                     "details": "",
                     "due_date": "not-a-date",
+                    "labels": "",
                 }
             ],
         }
@@ -181,6 +185,7 @@ def test_service_parses_an_empty_string_due_date_as_clearing_it():
                     "title": None,
                     "details": None,
                     "due_date": "",
+                    "labels": None,
                 }
             ],
         }
@@ -191,6 +196,76 @@ def test_service_parses_an_empty_string_due_date_as_clearing_it():
     )
 
     assert response.operations[0].due_date == ""
+
+
+def test_service_dedupes_and_trims_labels_on_create():
+    raw_response = json.dumps(
+        {
+            "reply": "Created it.",
+            "operations": [
+                {
+                    "type": "create_card",
+                    "column_id": 1,
+                    "title": "New card",
+                    "details": "",
+                    "due_date": "",
+                    "labels": " bug, Bug ,urgent ",
+                }
+            ],
+        }
+    )
+
+    response = AIService(FakeStructuredClient(raw_response)).respond(
+        {"id": 1, "columns": []}, "Create it", []
+    )
+
+    assert response.operations[0].labels == "bug,urgent"
+
+
+def test_service_rejects_a_label_that_is_too_long():
+    raw_response = json.dumps(
+        {
+            "reply": "Long label",
+            "operations": [
+                {
+                    "type": "create_card",
+                    "column_id": 1,
+                    "title": "New card",
+                    "details": "",
+                    "due_date": "",
+                    "labels": "x" * 25,
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(AIResponseError):
+        AIService(FakeStructuredClient(raw_response)).respond(
+            {"id": 1, "columns": []}, "Create it", []
+        )
+
+
+def test_service_rejects_too_many_labels():
+    raw_response = json.dumps(
+        {
+            "reply": "Too many labels",
+            "operations": [
+                {
+                    "type": "create_card",
+                    "column_id": 1,
+                    "title": "New card",
+                    "details": "",
+                    "due_date": "",
+                    "labels": "a,b,c,d,e,f",
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(AIResponseError):
+        AIService(FakeStructuredClient(raw_response)).respond(
+            {"id": 1, "columns": []}, "Create it", []
+        )
 
 
 def test_chat_request_limits_history_to_twenty_messages():

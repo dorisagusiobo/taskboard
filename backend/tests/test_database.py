@@ -235,16 +235,24 @@ def test_boards_are_isolated_per_user(database_path: Path):
     assert store.get_board("user", user_board_id)["name"] == "Board"
 
 
-def test_update_card_requires_a_title_details_or_due_date_change(database_path: Path):
+def test_update_card_requires_a_title_details_due_date_or_labels_change(
+    database_path: Path,
+):
     store = BoardStore(database_path)
     store.register_user("user", "password")
     board_id = first_board_id(store, "user")
     board = store.get_board("user", board_id)
     card_id = board["columns"][0]["cards"][0]["id"]
 
-    with pytest.raises(ValueError, match="title, details, or due date"):
+    with pytest.raises(ValueError, match="title, details, due date, or labels"):
         store.update_card(
-            "user", board_id, card_id, title=None, details=None, due_date=None
+            "user",
+            board_id,
+            card_id,
+            title=None,
+            details=None,
+            due_date=None,
+            labels=None,
         )
 
     assert store.get_board("user", board_id) == board
