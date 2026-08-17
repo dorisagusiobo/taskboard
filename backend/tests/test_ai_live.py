@@ -17,7 +17,7 @@ def require_live_test() -> None:
 def test_live_structured_read_only_response(tmp_path: Path):
     require_live_test()
     store = BoardStore(tmp_path / "read-only.sqlite3")
-    store.initialize("user")
+    store.register_user("user", "password")
     board = store.get_board("user")
 
     response = AIService(OpenRouterClient()).respond(
@@ -35,7 +35,7 @@ def test_live_structured_read_only_response(tmp_path: Path):
 def test_live_structured_create_uses_a_temporary_database(tmp_path: Path):
     require_live_test()
     store = BoardStore(tmp_path / "mutation.sqlite3")
-    store.initialize("user")
+    store.register_user("user", "password")
     original = store.get_board("user")
     target_column = original["columns"][0]
 

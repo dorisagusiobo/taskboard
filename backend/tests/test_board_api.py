@@ -268,7 +268,7 @@ def test_other_users_resources_are_not_accessible(
     authenticated_client: TestClient, database_path: Path
 ):
     store = BoardStore(database_path)
-    store.initialize("other")
+    store.register_user("other", "password")
     user_board = authenticated_client.get("/api/board").json()
     other_board = store.get_board("other")
     other_column = other_board["columns"][0]

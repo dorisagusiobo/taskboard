@@ -185,7 +185,7 @@ def test_ai_chat_cannot_mutate_another_users_board(
     database_path: Path,
 ):
     store = BoardStore(database_path)
-    store.initialize("other")
+    store.register_user("other", "password")
     user_board = authenticated_ai_client.get("/api/board").json()
     other_board = store.get_board("other")
     other_card = other_board["columns"][0]["cards"][0]

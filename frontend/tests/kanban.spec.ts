@@ -51,6 +51,49 @@ test("rejects invalid credentials", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Kanban Studio" })).toHaveCount(0);
 });
 
+test("creates a new account with its own seeded board", async ({ page }) => {
+  const username = `new-teammate-${Date.now()}`;
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Need an account? Create one" })
+    .click();
+  await expect(page.getByRole("heading", { name: "Create account" })).toBeVisible();
+
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill("correct-horse-battery");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
+  await expect(page.getByText(/signed in as/i)).toHaveText(
+    `Signed in as ${username}`
+  );
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill("correct-horse-battery");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+});
+
+test("rejects creating an account with a username that is already taken", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Need an account? Create one" })
+    .click();
+  await page.getByLabel("Username").fill("user");
+  await page.getByLabel("Password").fill("another-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.locator("form").getByRole("alert")).toHaveText(
+    "That username is already taken."
+  );
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toHaveCount(0);
+});
+
 test("keeps the session on refresh and signs out", async ({ page }) => {
   await login(page);
 

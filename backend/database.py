@@ -2,10 +2,13 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from auth import check_password, hash_password
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    password_hash TEXT NOT NULL DEFAULT '',
     CHECK (length(trim(username)) > 0)
 );
 
@@ -120,6 +123,10 @@ class InvalidPositionError(Exception):
     pass
 
 
+class UsernameTakenError(Exception):
+    pass
+
+
 class BoardStore:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -130,65 +137,107 @@ class BoardStore:
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
-    def initialize(self, username: str) -> None:
+    def _ensure_schema(self, connection: sqlite3.Connection) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        connection.executescript(SCHEMA_SQL)
+        columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(users)")
+        }
+        if "password_hash" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"
+            )
+
+    def init_schema(self) -> None:
         connection = self._connect()
         try:
-            connection.executescript(SCHEMA_SQL)
+            self._ensure_schema(connection)
+            connection.commit()
+        finally:
+            connection.close()
+
+    def register_user(self, username: str, password: str) -> None:
+        connection = self._connect()
+        try:
+            self._ensure_schema(connection)
             connection.execute("BEGIN IMMEDIATE")
-            connection.execute(
-                "INSERT INTO users (username) VALUES (?) ON CONFLICT DO NOTHING",
-                (username,),
-            )
-            user = connection.execute(
+            existing = connection.execute(
                 "SELECT id FROM users WHERE username = ?", (username,)
             ).fetchone()
-            board = connection.execute(
-                "SELECT id FROM boards WHERE user_id = ?", (user["id"],)
-            ).fetchone()
+            if existing is not None:
+                raise UsernameTakenError
 
-            if board is None:
+            cursor = connection.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, hash_password(password)),
+            )
+            user_id = cursor.lastrowid
+            if user_id is None:
+                raise RuntimeError("User insert did not return an id")
+
+            cursor = connection.execute(
+                "INSERT INTO boards (user_id) VALUES (?)", (user_id,)
+            )
+            board_id = cursor.lastrowid
+            if board_id is None:
+                raise RuntimeError("Board insert did not return an id")
+            column_ids: dict[int, int] = {}
+            for title, position in SEED_COLUMNS:
                 cursor = connection.execute(
-                    "INSERT INTO boards (user_id) VALUES (?)", (user["id"],)
+                    """
+                    INSERT INTO board_columns (board_id, title, position)
+                    VALUES (?, ?, ?)
+                    """,
+                    (board_id, title, position),
                 )
-                board_id = cursor.lastrowid
-                if board_id is None:
-                    raise RuntimeError("Board insert did not return an id")
-                column_ids: dict[int, int] = {}
-                for title, position in SEED_COLUMNS:
-                    cursor = connection.execute(
-                        """
-                        INSERT INTO board_columns (board_id, title, position)
-                        VALUES (?, ?, ?)
-                        """,
-                        (board_id, title, position),
-                    )
-                    column_id = cursor.lastrowid
-                    if column_id is None:
-                        raise RuntimeError("Column insert did not return an id")
-                    column_ids[position] = column_id
+                column_id = cursor.lastrowid
+                if column_id is None:
+                    raise RuntimeError("Column insert did not return an id")
+                column_ids[position] = column_id
 
-                for column_position, position, title, details in SEED_CARDS:
-                    connection.execute(
-                        """
-                        INSERT INTO cards (
-                            board_id, column_id, title, details, position
-                        ) VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (
-                            board_id,
-                            column_ids[column_position],
-                            title,
-                            details,
-                            position,
-                        ),
-                    )
+            for column_position, position, title, details in SEED_CARDS:
+                connection.execute(
+                    """
+                    INSERT INTO cards (
+                        board_id, column_id, title, details, position
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        board_id,
+                        column_ids[column_position],
+                        title,
+                        details,
+                        position,
+                    ),
+                )
             connection.commit()
         except Exception:
             connection.rollback()
             raise
         finally:
             connection.close()
+
+    def ensure_seed_account(self, username: str, password: str) -> None:
+        connection = self._connect()
+        try:
+            self._ensure_schema(connection)
+            any_user = connection.execute("SELECT 1 FROM users LIMIT 1").fetchone()
+        finally:
+            connection.close()
+        if any_user is None:
+            self.register_user(username, password)
+
+    def verify_password(self, username: str, password: str) -> bool:
+        connection = self._connect()
+        try:
+            row = connection.execute(
+                "SELECT password_hash FROM users WHERE username = ?", (username,)
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None or not row["password_hash"]:
+            return False
+        return check_password(password, row["password_hash"])
 
     def get_board(self, username: str) -> dict[str, Any]:
         connection = self._connect()

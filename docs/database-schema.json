@@ -21,6 +21,13 @@
           "type": "TEXT",
           "nullable": false,
           "collation": "NOCASE"
+        },
+        {
+          "name": "password_hash",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "",
+          "description": "PBKDF2-HMAC-SHA256 hash, see backend/auth.py. Never a plaintext password."
         }
       ],
       "constraints": [
@@ -252,13 +259,14 @@
         }
       ]
     },
-    "behavior": "Find or create the MVP user by username. Create and seed a board only when that user has no board. Never reseed or overwrite an existing board."
+    "behavior": "BoardStore.ensure_seed_account registers this account only when the users table is completely empty (fresh install). Beyond that, POST /api/auth/register (BoardStore.register_user) is the only way a user and board are created: it rejects an already-taken username (UsernameTakenError / HTTP 409) rather than reusing it, and always seeds a fresh board in the same transaction. Never reseed or overwrite an existing user's board or password."
   },
   "application_invariants": [
     "Each initialized board has exactly five columns.",
     "Columns may be renamed but may not be created, deleted, or reordered through the API.",
     "Card positions within each column are contiguous integers beginning at zero after every committed mutation.",
-    "The authenticated session determines the user; clients never submit a user_id or board_id to select ownership."
+    "The authenticated session determines the user; clients never submit a user_id or board_id to select ownership.",
+    "Registering an already-taken username is rejected (HTTP 409); it never overwrites the existing account's password or board."
   ],
   "conversation_history": {
     "persistence": "none",

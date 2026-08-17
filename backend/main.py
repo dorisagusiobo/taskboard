@@ -19,6 +19,7 @@ from database import (
     CardNotFoundError,
     ColumnNotFoundError,
     InvalidPositionError,
+    UsernameTakenError,
 )
 from openrouter_client import (
     OpenRouterClient,
@@ -33,8 +34,8 @@ DEFAULT_DATA_DIR = (
 )
 DEFAULT_DATABASE_PATH = DEFAULT_DATA_DIR / "project-management.sqlite3"
 SESSION_COOKIE = "pm_session"
-MVP_USERNAME = "user"
-MVP_PASSWORD = "password"
+DEFAULT_SEED_USERNAME = "user"
+DEFAULT_SEED_PASSWORD = "password"
 DEFAULT_SESSION_SECRET = secrets.token_urlsafe(32)
 
 ColumnTitle = Annotated[
@@ -44,11 +45,26 @@ CardTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
 CardDetails = Annotated[str, StringConstraints(max_length=4000)]
+Username = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    ),
+]
+Password = Annotated[str, StringConstraints(min_length=8, max_length=200)]
 
 
 class LoginCredentials(BaseModel):
     username: str
     password: str
+
+
+class RegisterRequest(BaseModel):
+    username: Username
+    password: Password
 
 
 class UserSession(BaseModel):
@@ -118,7 +134,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        board_store.initialize(MVP_USERNAME)
+        board_store.init_schema()
+        board_store.ensure_seed_account(DEFAULT_SEED_USERNAME, DEFAULT_SEED_PASSWORD)
         yield
 
     app = FastAPI(title="Project Management MVP", version="0.3.0", lifespan=lifespan)
@@ -152,7 +169,7 @@ def create_app(
 
     def authenticated_username(request: Request) -> str:
         username = request.session.get("username")
-        if username != MVP_USERNAME:
+        if not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
@@ -163,17 +180,35 @@ def create_app(
     def health_check():
         return {"status": "ok"}
 
+    @app.post(
+        "/api/auth/register",
+        response_model=UserSession,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def register(payload: RegisterRequest, request: Request):
+        try:
+            board_store.register_user(payload.username, payload.password)
+        except UsernameTakenError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username is already taken",
+            ) from error
+
+        request.session.clear()
+        request.session["username"] = payload.username
+        return UserSession(username=payload.username)
+
     @app.post("/api/auth/login", response_model=UserSession)
     def login(credentials: LoginCredentials, request: Request):
-        if credentials.username != MVP_USERNAME or credentials.password != MVP_PASSWORD:
+        if not board_store.verify_password(credentials.username, credentials.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid username or password",
             )
 
         request.session.clear()
-        request.session["username"] = MVP_USERNAME
-        return UserSession(username=MVP_USERNAME)
+        request.session["username"] = credentials.username
+        return UserSession(username=credentials.username)
 
     @app.get("/api/auth/me", response_model=UserSession)
     def current_session(request: Request):

@@ -5,16 +5,25 @@ import { useState, type FormEvent } from "react";
 type LoginFormProps = {
   error: string | null;
   isSubmitting: boolean;
-  onSubmit: (username: string, password: string) => Promise<void>;
+  onLogin: (username: string, password: string) => Promise<void>;
+  onRegister: (username: string, password: string) => Promise<void>;
 };
 
-export const LoginForm = ({ error, isSubmitting, onSubmit }: LoginFormProps) => {
+export const LoginForm = ({
+  error,
+  isSubmitting,
+  onLogin,
+  onRegister,
+}: LoginFormProps) => {
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  const isRegister = mode === "register";
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await onSubmit(username, password);
+    await (isRegister ? onRegister : onLogin)(username, password);
   };
 
   return (
@@ -28,10 +37,12 @@ export const LoginForm = ({ error, isSubmitting, onSubmit }: LoginFormProps) => 
           Project workspace
         </p>
         <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
-          Sign in
+          {isRegister ? "Create account" : "Sign in"}
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--gray-text)]">
-          Enter your account details to open the Kanban board.
+          {isRegister
+            ? "Choose a username and password to set up your own board."
+            : "Enter your account details to open your Kanban board."}
         </p>
 
         <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
@@ -50,6 +61,8 @@ export const LoginForm = ({ error, isSubmitting, onSubmit }: LoginFormProps) => 
               onChange={(event) => setUsername(event.target.value)}
               className="mt-2 w-full rounded-xl border border-[var(--stroke)] bg-white px-4 py-3 text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] focus:ring-2 focus:ring-[rgba(32,157,215,0.15)]"
               required
+              minLength={isRegister ? 3 : undefined}
+              maxLength={50}
             />
           </div>
 
@@ -64,11 +77,12 @@ export const LoginForm = ({ error, isSubmitting, onSubmit }: LoginFormProps) => 
               id="password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={isRegister ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="mt-2 w-full rounded-xl border border-[var(--stroke)] bg-white px-4 py-3 text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] focus:ring-2 focus:ring-[rgba(32,157,215,0.15)]"
               required
+              minLength={isRegister ? 8 : undefined}
             />
           </div>
 
@@ -86,7 +100,23 @@ export const LoginForm = ({ error, isSubmitting, onSubmit }: LoginFormProps) => 
             disabled={isSubmitting}
             className="w-full rounded-full bg-[var(--secondary-purple)] px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Signing in..." : "Sign in"}
+            {isSubmitting
+              ? isRegister
+                ? "Creating account..."
+                : "Signing in..."
+              : isRegister
+                ? "Create account"
+                : "Sign in"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode(isRegister ? "login" : "register")}
+            className="w-full text-center text-sm font-semibold text-[var(--primary-blue)] transition hover:brightness-110"
+          >
+            {isRegister
+              ? "Already have an account? Sign in"
+              : "Need an account? Create one"}
           </button>
         </form>
       </section>

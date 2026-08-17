@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A local-first Kanban project management app: FastAPI backend (Python, sync `sqlite3`), a statically-exported Next.js frontend served by FastAPI, SQLite persistence, and an AI chat sidebar (OpenRouter) that can create/edit/move cards. Ships as a single Docker container for local use. See root `AGENTS.md` for product/business requirements and coding-standards ground rules (simplicity over engineering, no emojis, root-cause debugging), and `docs/PLAN.md` for the part-by-part build history (all 10 parts implemented).
 
+**Post-MVP architecture pivot (in progress):** the original MVP shipped a single hardcoded user and exactly one board. That is being generalized into a real multi-user, multi-board product. Real per-user accounts (hashed passwords, self-service registration) landed first; multi-board-per-user is the next slice. Treat statements elsewhere in this file about "the fixed MVP user" or "one board" as describing the parts not yet migrated, not an intentional constraint to preserve.
+
 There are three `AGENTS.md` files with directory-scoped rules: root, `backend/AGENTS.md`, `frontend/AGENTS.md` (the latter two supplement, and are subordinate to, the root file). Read the relevant one before editing in that directory.
 
 ## Commands
@@ -14,7 +16,7 @@ Run from `backend/` (uses `uv`):
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy main.py database.py ai_service.py openrouter_client.py
+uv run mypy main.py database.py ai_service.py openrouter_client.py auth.py
 uv run pytest -q                          # full suite, 80% coverage gate (main/database/ai_service/openrouter_client)
 uv run pytest -q tests/test_board_api.py  # single file
 uv run pytest -q tests/test_board_api.py::test_name  # single test
@@ -46,7 +48,7 @@ Whole-app / Docker (from repo root):
 ./scripts/test-e2e-docker.sh   # isolated volume + deterministic fake OpenRouter server, no API spend
 ```
 
-Sign in with `user` / `password` (hardcoded MVP credential, checked in `backend/main.py`).
+On first run, a zero-config seed account (`user` / `password`) is auto-registered so the app works immediately (`BoardStore.ensure_seed_account`, only fires when the `users` table is empty). Real accounts now go through `POST /api/auth/register` (username 3-50 chars `[A-Za-z0-9_-]`, password 8+ chars) with PBKDF2-hashed passwords (`backend/auth.py`, stdlib-only, no new dependency); the frontend login screen has a "Create one" toggle for this. `POST /api/auth/login` verifies against the stored hash.
 
 ## Architecture
 
@@ -57,8 +59,9 @@ Sign in with `user` / `password` (hardcoded MVP credential, checked in `backend/
 - `database.py` — `BoardStore`: schema init/seeding, ownership-scoped queries, and all board/card/column mutations. Every mutation is transactional; multi-row moves shift positions above current max before writing contiguous positions to avoid unique-constraint collisions mid-transaction.
 - `ai_service.py` — builds the OpenRouter structured-output request (board + history + message), and validates/parses the model's structured JSON response into typed operations.
 - `openrouter_client.py` — the only module that talks to OpenRouter; owns API key handling and provider error mapping.
+- `auth.py` — PBKDF2-HMAC-SHA256 password hashing (`hash_password`/`check_password`), stdlib `hashlib`/`secrets` only.
 
-Auth is always resolved server-side from the signed session (`request.session["username"]`); routes never trust a client-supplied user or board ID. There is exactly one hardcoded user in the MVP, but the schema supports multiple users/boards for future use.
+Auth is always resolved server-side from the signed session (`request.session["username"]`); routes never trust a client-supplied user or board ID. Accounts are real (hashed passwords in `users.password_hash`, self-service `POST /api/auth/register`), not a single hardcoded credential — see "Post-MVP architecture pivot" above. Each user still owns exactly one board (`boards.user_id UNIQUE`); multi-board-per-user is not yet implemented.
 
 **Fixed board shape**: every board has exactly five columns (Backlog, Discovery, In Progress, Review, Done). Columns can be renamed but never created/deleted/reordered via the API — this is enforced in application code, not a DB constraint (SQLite can't express "exactly five child rows" declaratively). See `docs/DATABASE.md` for the full schema, ownership-guarantee reasoning, and mutation walkthroughs (create/edit/delete/rename/reorder/cross-column move).
 
@@ -67,7 +70,7 @@ Auth is always resolved server-side from the signed session (`request.session["u
 **Frontend structure** (`frontend/src/`):
 - `components/KanbanBoard.tsx` — loads the canonical board from the API and coordinates all mutations; treats API responses as the source of truth (no optimistic local-only state once persistence exists).
 - `components/KanbanColumn.tsx`, `KanbanCard.tsx`, `KanbanCardPreview.tsx`, `NewCardForm.tsx` — column/card presentation, drag-and-drop targets, and card add/edit forms.
-- `components/AuthGate.tsx` / `LoginForm.tsx` — checks `/api/auth/me` to gate the login form vs. board.
+- `components/AuthGate.tsx` / `LoginForm.tsx` — checks `/api/auth/me` to gate the login/register form vs. board; `LoginForm` toggles between sign-in and self-service registration (`POST /api/auth/register`).
 - `components/AIChatSidebar.tsx` — the Ask AI drawer; calls `/api/ai/chat` and replaces board state with the canonical response on a successful mutation.
 - `lib/kanban.ts` — pure board types and move/reorder planning logic (no side effects; this is where drag-and-drop destination math lives).
 - `lib/api.ts` — typed fetch client for auth/board/AI endpoints plus response normalization.

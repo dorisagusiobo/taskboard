@@ -13,7 +13,7 @@ From the project root, use the platform script for your OS:
 The app is served at http://localhost:8000.
 The start script returns only after the container reports a healthy API, or prints the container logs and exits with an error.
 
-Sign in with username `user` and password `password`.
+A zero-config account (username `user`, password `password`) is created automatically the first time the app starts with an empty database, so you can sign in right away. Use "Need an account? Create one" on the sign-in screen to register additional accounts (username 3+ characters, password 8+ characters) — each account gets its own private board.
 
 Use **Ask AI** on the board to open the assistant. The assistant can answer questions and create, edit, or move cards. Conversation history stays only in browser memory and clears on reload or logout; validated board changes persist in SQLite.
 
@@ -35,7 +35,7 @@ To stop the container:
 ## Tests
 
 ```bash
-cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy main.py database.py ai_service.py openrouter_client.py && uv run pytest -q
+cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy main.py database.py ai_service.py openrouter_client.py auth.py && uv run pytest -q
 cd frontend && npm run lint && npm run test:unit && npm run build
 ./scripts/smoke-test-docker.sh
 ./scripts/test-e2e-docker.sh

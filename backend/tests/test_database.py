@@ -3,12 +3,17 @@ from pathlib import Path
 
 import pytest
 
-from database import BoardNotFoundError, BoardStore, CardNotFoundError
+from database import (
+    BoardNotFoundError,
+    BoardStore,
+    CardNotFoundError,
+    UsernameTakenError,
+)
 
 
-def test_initialization_seeds_once_and_preserves_existing_data(database_path: Path):
+def test_registration_seeds_a_board_and_hashes_the_password(database_path: Path):
     store = BoardStore(database_path)
-    store.initialize("user")
+    store.register_user("user", "password")
 
     board = store.get_board("user")
     assert [column["title"] for column in board["columns"]] == [
@@ -19,20 +24,56 @@ def test_initialization_seeds_once_and_preserves_existing_data(database_path: Pa
         "Done",
     ]
     assert sum(len(column["cards"]) for column in board["columns"]) == 8
+    assert store.verify_password("user", "password") is True
+    assert store.verify_password("user", "wrong") is False
+    assert store.verify_password("missing", "password") is False
 
+    connection = sqlite3.connect(database_path)
+    try:
+        stored_hash = connection.execute(
+            "SELECT password_hash FROM users WHERE username = 'user'"
+        ).fetchone()[0]
+        assert stored_hash != "password"
+    finally:
+        connection.close()
+
+
+def test_registering_an_existing_username_is_rejected_and_preserves_data(
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("user", "password")
+    board = store.get_board("user")
     first_column_id = board["columns"][0]["id"]
     store.rename_column("user", first_column_id, "Preserved")
-    store.initialize("user")
+
+    with pytest.raises(UsernameTakenError):
+        store.register_user("user", "different-password")
 
     reloaded = store.get_board("user")
     assert reloaded["columns"][0]["title"] == "Preserved"
     assert sum(len(column["cards"]) for column in reloaded["columns"]) == 8
+    assert store.verify_password("user", "password") is True
+
+
+def test_ensure_seed_account_only_seeds_an_empty_database(database_path: Path):
+    store = BoardStore(database_path)
+    store.ensure_seed_account("user", "password")
+    store.ensure_seed_account("user", "password")
+
+    assert store.verify_password("user", "password") is True
+
+    store.register_user("someone-else", "password")
+    store.ensure_seed_account("another-seed", "password")
+
+    with pytest.raises(BoardNotFoundError):
+        store.get_board("another-seed")
 
 
 def test_schema_enforces_ownership_uniqueness_and_cascades(database_path: Path):
     store = BoardStore(database_path)
-    store.initialize("user")
-    store.initialize("other")
+    store.register_user("user", "password")
+    store.register_user("other", "password")
 
     user_board = store.get_board("user")
     other_board = store.get_board("other")
@@ -83,7 +124,7 @@ def test_schema_enforces_ownership_uniqueness_and_cascades(database_path: Path):
 
 def test_unknown_user_has_no_board(database_path: Path):
     store = BoardStore(database_path)
-    store.initialize("user")
+    store.register_user("user", "password")
 
     with pytest.raises(BoardNotFoundError):
         store.get_board("missing")
@@ -91,7 +132,7 @@ def test_unknown_user_has_no_board(database_path: Path):
 
 def test_update_card_requires_a_title_or_details_change(database_path: Path):
     store = BoardStore(database_path)
-    store.initialize("user")
+    store.register_user("user", "password")
     board = store.get_board("user")
     card_id = board["columns"][0]["cards"][0]["id"]
 
@@ -103,7 +144,7 @@ def test_update_card_requires_a_title_or_details_change(database_path: Path):
 
 def test_board_operations_apply_create_edit_and_move_atomically(database_path: Path):
     store = BoardStore(database_path)
-    store.initialize("user")
+    store.register_user("user", "password")
     board = store.get_board("user")
     first_column = board["columns"][0]
     target_column = board["columns"][1]
@@ -148,7 +189,7 @@ def test_board_operations_roll_back_every_change_when_one_is_invalid(
     database_path: Path,
 ):
     store = BoardStore(database_path)
-    store.initialize("user")
+    store.register_user("user", "password")
     original = store.get_board("user")
     card = original["columns"][0]["cards"][0]
 
@@ -178,8 +219,8 @@ def test_board_operations_reject_unsupported_changes_and_other_users_ids(
     database_path: Path,
 ):
     store = BoardStore(database_path)
-    store.initialize("user")
-    store.initialize("other")
+    store.register_user("user", "password")
+    store.register_user("other", "password")
     user_board = store.get_board("user")
     other_board = store.get_board("other")
 

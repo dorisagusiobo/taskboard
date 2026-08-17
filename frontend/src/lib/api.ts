@@ -76,6 +76,12 @@ export const login = (username: string, password: string) =>
     jsonOptions("POST", { username, password })
   );
 
+export const register = (username: string, password: string) =>
+  request<Session>(
+    "/api/auth/register",
+    jsonOptions("POST", { username, password })
+  );
+
 export const logout = () =>
   request<void>("/api/auth/logout", { method: "POST" });
 

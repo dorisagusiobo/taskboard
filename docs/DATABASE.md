@@ -4,7 +4,7 @@ Part 5 defined this database contract, and Part 6 implements it in `backend/data
 
 ## Scope and lifetime
 
-The database persists users and Kanban boards. It supports multiple users while keeping the MVP UI and authentication limited to the fixed `user` / `password` account. Each user owns exactly one board with five fixed, ordered columns. Column titles and card content are editable; columns cannot be added, removed, or reordered.
+The database persists users and Kanban boards. Authentication supports real, independently-registered accounts (see "Accounts and passwords" below) — the fixed `user` / `password` credential is only a zero-config seed account created on first run, not a hardcoded check. Each user owns exactly one board with five fixed, ordered columns. Column titles and card content are editable; columns cannot be added, removed, or reordered. (Multi-board-per-user is a planned follow-up, not yet implemented — see `CLAUDE.md`.)
 
 The default file is `data/project-management.sqlite3`. Docker mounts the local named volume `project-management-mvp-data` at `/app/data`, so rebuilding the container does not erase it. `DATABASE_PATH` can override the file location for automated tests and local configuration.
 
@@ -29,6 +29,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    password_hash TEXT NOT NULL DEFAULT '',
     CHECK (length(trim(username)) > 0)
 );
 
@@ -67,7 +68,11 @@ CREATE TABLE cards (
 CREATE INDEX idx_cards_board_id ON cards(board_id);
 ```
 
-No password is stored in the database during the MVP because authentication remains the fixed backend credential. Timestamps, board names, roles, soft deletes, and chat tables are omitted because no current behavior needs them.
+## Accounts and passwords
+
+`users.password_hash` stores a PBKDF2-HMAC-SHA256 hash (`backend/auth.py`, stdlib `hashlib`/`secrets`, 260,000 iterations, random per-password salt) — never a plaintext password. `POST /api/auth/register` creates a new account (rejecting an already-taken username) and seeds its board in the same transaction; `POST /api/auth/login` verifies the submitted password against the stored hash with a constant-time comparison. `BoardStore.ensure_seed_account` auto-registers the `user` / `password` account only when the `users` table is completely empty, so a fresh install remains zero-config without interfering with real registrations.
+
+Timestamps, board names, roles, soft deletes, and chat tables are omitted because no current behavior needs them.
 
 ## Ownership guarantees
 
@@ -79,9 +84,9 @@ Deleting a user cascades through their board, columns, and cards. The MVP API wi
 
 ## Initialization
 
-On startup, Part 6 will create the schema when missing, find or create the case-insensitive `user` account, and look up its board. Only when no board exists will it create the board, five columns, and the eight current demo cards from `database-schema.json`.
+On startup, `BoardStore.init_schema()` creates the schema when missing (including an `ALTER TABLE` fallback that adds `password_hash` to a pre-existing `users` table, so upgrading in place doesn't crash), then `BoardStore.ensure_seed_account("user", "password")` registers the zero-config seed account only if the `users` table is completely empty.
 
-Initialization must be transactional and idempotent. An existing board is never reset, reseeded, or renamed during startup. Tests use a temporary `DATABASE_PATH`, never the developer database.
+Beyond startup, `BoardStore.register_user(username, password)` is the only way a board gets created: it hashes the password, inserts the user row, and seeds the board, five columns, and the eight demo cards from `database-schema.json`, all in one transaction. It raises `UsernameTakenError` for an existing username rather than silently reusing it — registration is not idempotent by design, unlike the old startup-only seeding. Tests use a temporary `DATABASE_PATH`, never the developer database.
 
 ## Mutation walkthrough
 

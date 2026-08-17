@@ -134,6 +134,61 @@ describe("AuthGate", () => {
     ).toBeVisible();
   });
 
+  it("creates an account and signs in", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(401))
+      .mockResolvedValueOnce(response(201, { username: "new-teammate" }))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
+    render(<AuthGate />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Need an account? Create one" })
+    );
+    expect(
+      screen.getByRole("heading", { name: "Create account" })
+    ).toBeVisible();
+
+    await userEvent.type(screen.getByLabelText("Username"), "new-teammate");
+    await userEvent.type(screen.getByLabelText("Password"), "correct-horse");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create account" })
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Kanban Studio" })
+    ).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/register",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          username: "new-teammate",
+          password: "correct-horse",
+        }),
+      })
+    );
+  });
+
+  it("shows an error when the chosen username is already taken", async () => {
+    fetchMock.mockResolvedValueOnce(response(401)).mockResolvedValueOnce(
+      response(409, { detail: "Username is already taken" })
+    );
+    render(<AuthGate />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Need an account? Create one" })
+    );
+    await userEvent.type(screen.getByLabelText("Username"), "user");
+    await userEvent.type(screen.getByLabelText("Password"), "correct-horse");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create account" })
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "already taken"
+    );
+  });
+
   it("returns to sign in when the board session has expired", async () => {
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))

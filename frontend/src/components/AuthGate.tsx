@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { LoginForm } from "@/components/LoginForm";
-import { ApiError, getSession, login, logout } from "@/lib/api";
+import { ApiError, getSession, login, logout, register } from "@/lib/api";
 
 type AuthStatus = "loading" | "anonymous" | "authenticated";
 
@@ -50,6 +50,30 @@ export const AuthGate = () => {
     }
   };
 
+  const handleRegister = async (registerUsername: string, password: string) => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const session = await register(registerUsername, password);
+      setUsername(session.username);
+      setStatus("authenticated");
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 409) {
+        setError("That username is already taken.");
+        return;
+      }
+      if (requestError instanceof ApiError && requestError.status === 422) {
+        setError(
+          "Usernames need 3+ letters/numbers and passwords need 8+ characters."
+        );
+        return;
+      }
+      setError("Unable to create your account. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleLogout = async () => {
     setError(null);
     setIsSubmitting(true);
@@ -85,7 +109,8 @@ export const AuthGate = () => {
       <LoginForm
         error={error}
         isSubmitting={isSubmitting}
-        onSubmit={handleLogin}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
       />
     );
   }

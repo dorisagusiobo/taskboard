@@ -54,6 +54,51 @@ def test_static_frontend_is_served_when_present(
     assert missing_api_response.status_code == 404
 
 
+def test_register_creates_an_account_seeds_a_board_and_signs_in(client):
+    response = client.post(
+        "/api/auth/register",
+        json={"username": "new-teammate", "password": "correct-horse"},
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {"username": "new-teammate"}
+    cookie = response.headers["set-cookie"]
+    assert cookie.startswith(f"{main.SESSION_COOKIE}=")
+
+    session_response = client.get("/api/auth/me")
+    assert session_response.status_code == 200
+    assert session_response.json() == {"username": "new-teammate"}
+
+    board_response = client.get("/api/board")
+    assert board_response.status_code == 200
+    assert len(board_response.json()["columns"]) == 5
+
+
+def test_register_rejects_a_username_that_is_already_taken(client):
+    response = client.post(
+        "/api/auth/register", json={"username": "user", "password": "another-pass"}
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Username is already taken"}
+
+
+@pytest.mark.parametrize(
+    ("username", "password"),
+    [
+        ("ab", "long-enough"),
+        ("has a space", "long-enough"),
+        ("valid-name", "short"),
+    ],
+)
+def test_register_rejects_invalid_username_or_password(client, username, password):
+    response = client.post(
+        "/api/auth/register", json={"username": username, "password": password}
+    )
+
+    assert response.status_code == 422
+
+
 def test_login_creates_a_signed_session_cookie(client):
     response = client.post(
         "/api/auth/login", json={"username": "user", "password": "password"}
@@ -71,6 +116,23 @@ def test_login_creates_a_signed_session_cookie(client):
     session_response = client.get("/api/auth/me")
     assert session_response.status_code == 200
     assert session_response.json() == {"username": "user"}
+
+
+def test_login_works_for_a_freshly_registered_account(client):
+    register_response = client.post(
+        "/api/auth/register",
+        json={"username": "second-user", "password": "correct-horse"},
+    )
+    assert register_response.status_code == 201
+    client.post("/api/auth/logout")
+
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "second-user", "password": "correct-horse"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"username": "second-user"}
 
 
 @pytest.mark.parametrize(
