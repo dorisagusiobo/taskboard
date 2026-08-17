@@ -17,7 +17,7 @@ A zero-config account (username `user`, password `password`) is created automati
 
 Each account can hold any number of boards. Use the board switcher at the top of the page to create, rename, switch between, or delete boards (you always keep at least one). Every board has the same five fixed columns (Backlog, Discovery, In Progress, Review, Done); only the first board created for a new account starts with sample cards.
 
-Cards can carry a due date (overdue ones get a red badge) and up to 5 short labels. Use the search box above a board to filter its cards by title, details, or label.
+Cards can carry a due date (overdue ones get a red badge) and up to 5 short labels. Use the search box above a board to filter its cards by title, details, or label. Use **Export** next to the board switcher to download the current board as CSV or JSON.
 
 Use **Ask AI** on the board to open the assistant. The assistant can answer questions and create, edit, or move cards on the board you currently have open. Conversation history stays only in browser memory and clears on reload or logout; validated board changes persist in SQLite.
 

@@ -17,6 +17,7 @@ import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { AIChatSidebar } from "@/components/AIChatSidebar";
 import { BoardSwitcher } from "@/components/BoardSwitcher";
+import { ExportBoardMenu } from "@/components/ExportBoardMenu";
 import { ChatIcon, CloseIcon, SearchIcon } from "@/components/icons";
 import {
   ApiError,
@@ -371,15 +372,18 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <BoardSwitcher
-              boards={boards}
-              activeBoardId={board.id}
-              isDisabled={isMutating}
-              onSelect={handleSelectBoard}
-              onCreate={handleCreateBoard}
-              onRename={handleRenameBoard}
-              onDelete={handleDeleteBoard}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <BoardSwitcher
+                boards={boards}
+                activeBoardId={board.id}
+                isDisabled={isMutating}
+                onSelect={handleSelectBoard}
+                onCreate={handleCreateBoard}
+                onRename={handleRenameBoard}
+                onDelete={handleDeleteBoard}
+              />
+              <ExportBoardMenu board={board} isDisabled={isMutating} />
+            </div>
             <div className="relative w-full max-w-xs">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gray-text)]" />
               <input

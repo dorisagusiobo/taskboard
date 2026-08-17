@@ -453,6 +453,55 @@ test("searches cards across columns without disturbing drag state", async ({
   await expect(page.getByText("Unrelated other card")).toBeVisible();
 });
 
+test("exports the board as CSV and JSON downloads", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  const columnTitle = await firstColumn
+    .getByRole("textbox", { name: "Column title", exact: true })
+    .inputValue();
+
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Downloadable card");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
+    firstColumn.getByRole("button", { name: "Add card" }).click(),
+  ]);
+
+  await page.getByRole("button", { name: "Export" }).click();
+  const [csvDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByText("CSV", { exact: true }).click(),
+  ]);
+  expect(csvDownload.suggestedFilename()).toMatch(/^board-\d{4}-\d{2}-\d{2}\.csv$/);
+  const csvStream = await csvDownload.createReadStream();
+  const csvChunks: Buffer[] = [];
+  for await (const chunk of csvStream) {
+    csvChunks.push(chunk as Buffer);
+  }
+  const csvContent = Buffer.concat(csvChunks).toString("utf-8");
+  expect(csvContent.split("\r\n")[0]).toBe(
+    "Column,Title,Details,Due Date,Labels"
+  );
+  expect(csvContent).toContain(`${columnTitle},Downloadable card`);
+
+  await page.getByRole("button", { name: "Export" }).click();
+  const [jsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByText("JSON", { exact: true }).click(),
+  ]);
+  expect(jsonDownload.suggestedFilename()).toMatch(
+    /^board-\d{4}-\d{2}-\d{2}\.json$/
+  );
+  const jsonStream = await jsonDownload.createReadStream();
+  const jsonChunks: Buffer[] = [];
+  for await (const chunk of jsonStream) {
+    jsonChunks.push(chunk as Buffer);
+  }
+  const parsed = JSON.parse(Buffer.concat(jsonChunks).toString("utf-8"));
+  expect(parsed.name).toBe("Board");
+  expect(Array.isArray(parsed.columns)).toBe(true);
+});
+
 test("uses AI through FastAPI and preserves validated changes", async ({ page }) => {
   await login(page);
   const firstColumn = page.locator('[data-testid^="column-"]').first();

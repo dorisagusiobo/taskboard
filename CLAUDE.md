@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A local-first Kanban project management app: FastAPI backend (Python, sync `sqlite3`), a statically-exported Next.js frontend served by FastAPI, SQLite persistence, and an AI chat sidebar (OpenRouter) that can create/edit/move cards. Ships as a single Docker container for local use. See root `AGENTS.md` for product/business requirements and coding-standards ground rules (simplicity over engineering, no emojis, root-cause debugging), and `docs/PLAN.md` for the part-by-part build history (all 10 parts implemented).
 
-**Post-MVP architecture pivot:** the original MVP shipped a single hardcoded user and exactly one board. It is now a real multi-user, multi-board product: real per-user accounts (hashed passwords, self-service registration, self-service password change), multi-board-per-user, card due dates and labels (both manual and AI-assisted), and client-side card search have all landed. The per-board shape is still fixed at exactly five columns (Backlog/Discovery/In Progress/Review/Done) — that constraint was deliberately kept, not dropped. Further product features remain open follow-ups; see git history for what's landed so far.
+**Post-MVP architecture pivot:** the original MVP shipped a single hardcoded user and exactly one board. It is now a real multi-user, multi-board product: real per-user accounts (hashed passwords, self-service registration, self-service password change), multi-board-per-user, card due dates and labels (both manual and AI-assisted), client-side card search, and CSV/JSON board export have all landed. The per-board shape is still fixed at exactly five columns (Backlog/Discovery/In Progress/Review/Done) — that constraint was deliberately kept, not dropped. Further product features remain open follow-ups; see git history for what's landed so far.
 
 There are three `AGENTS.md` files with directory-scoped rules: root, `backend/AGENTS.md`, `frontend/AGENTS.md` (the latter two supplement, and are subordinate to, the root file). Read the relevant one before editing in that directory.
 
@@ -73,15 +73,18 @@ Auth is always resolved server-side from the signed session (`request.session["u
 
 **Card search**: purely client-side, no backend involvement. `KanbanBoard` holds a `searchQuery` string; `lib/kanban.ts`'s `cardMatchesQuery` does a case-insensitive substring match against title, details, and labels. Non-matching cards get a `hidden` CSS class rather than being removed from the DOM or from `@dnd-kit`'s per-column `SortableContext` — removing them would break drag-index math — and a card being edited is never hidden even if the query no longer matches it.
 
+**Board export**: also purely client-side — the board is already loaded in full, so CSV/JSON generation and the file download both happen in the browser with no new API endpoint. `lib/kanban.ts`'s `boardToExportRows`/`rowsToCsv` are pure and unit-tested; `ExportBoardMenu` does the actual `Blob` + `URL.createObjectURL` + synthetic `<a download>` click, which is DOM-dependent and only lightly tested (mocked `URL.createObjectURL`/`revokeObjectURL` and a spy on `HTMLAnchorElement.prototype.click`) — the Playwright e2e test is what actually verifies a real download and its content via `page.waitForEvent("download")`.
+
 **Frontend structure** (`frontend/src/`):
 - `components/KanbanBoard.tsx` — owns the active board id and search query, loads the board list and the canonical active board from the API, and coordinates all mutations; treats API responses as the source of truth (no optimistic local-only state once persistence exists).
 - `components/BoardSwitcher.tsx` — lists the user's boards as pills, and handles select/create/rename/delete (delete is hidden when it's the only board, mirroring the backend's `LastBoardError` guard).
+- `components/ExportBoardMenu.tsx` — downloads the active board as CSV or JSON; no backend involvement.
 - `components/KanbanColumn.tsx`, `KanbanCard.tsx`, `KanbanCardPreview.tsx`, `NewCardForm.tsx` — column/card presentation, drag-and-drop targets, card add/edit forms, and search-driven visibility.
 - `components/AuthGate.tsx` / `LoginForm.tsx` — checks `/api/auth/me` to gate the login/register form vs. board; `LoginForm` toggles between sign-in and self-service registration (`POST /api/auth/register`).
 - `components/ChangePasswordForm.tsx` — collapsed-by-default inline form in the authenticated header (`POST /api/auth/password`).
 - `components/AIChatSidebar.tsx` — the Ask AI drawer; calls `/api/boards/{board_id}/ai/chat` and replaces board state with the canonical response on a successful mutation.
 - `components/icons.tsx` — shared inline-SVG icons (no icon library dependency).
-- `lib/kanban.ts` — pure board types, move/reorder planning logic, due-date/label/search helpers (no side effects; this is where all UI-independent board math lives).
+- `lib/kanban.ts` — pure board types, move/reorder planning logic, due-date/label/search/export helpers (no side effects; this is where all UI-independent board math lives).
 - `lib/api.ts` — typed fetch client for auth/board-management/board-content/AI endpoints plus response normalization (snake_case wire format to camelCase/array frontend types).
 
 Drag-and-drop uses `@dnd-kit` pointer/keyboard sensors; destination calculation happens in `lib/kanban.ts` before any state update (not optimistically inline in the component).

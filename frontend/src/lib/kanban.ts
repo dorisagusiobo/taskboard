@@ -44,6 +44,45 @@ export const labelAccent = (label: string): number => {
   return Math.abs(hash) % LABEL_ACCENT_COUNT;
 };
 
+export type ExportRow = {
+  column: string;
+  title: string;
+  details: string;
+  dueDate: string;
+  labels: string;
+};
+
+export const boardToExportRows = (board: BoardData): ExportRow[] =>
+  board.columns.flatMap((column) =>
+    column.cardIds.map((cardId) => {
+      const card = board.cards[cardId];
+      return {
+        column: column.title,
+        title: card.title,
+        details: card.details,
+        dueDate: card.dueDate,
+        labels: formatLabels(card.labels),
+      };
+    })
+  );
+
+const CSV_HEADER = ["Column", "Title", "Details", "Due Date", "Labels"];
+
+const escapeCsvField = (value: string): string =>
+  /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+
+export const rowsToCsv = (rows: ExportRow[]): string => {
+  const lines = [CSV_HEADER.join(",")];
+  for (const row of rows) {
+    lines.push(
+      [row.column, row.title, row.details, row.dueDate, row.labels]
+        .map(escapeCsvField)
+        .join(",")
+    );
+  }
+  return lines.join("\r\n");
+};
+
 export const cardMatchesQuery = (card: Card, query: string): boolean => {
   const trimmed = query.trim().toLowerCase();
   if (trimmed === "") {

@@ -92,3 +92,11 @@ export const SearchIcon = ({ className }: IconProps = {}) => (
     <path d="m21 21-4.35-4.35" />
   </svg>
 );
+
+export const DownloadIcon = ({ className }: IconProps = {}) => (
+  <svg {...baseProps} className={className}>
+    <path d="M12 3v12" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M4 19h16" />
+  </svg>
+);

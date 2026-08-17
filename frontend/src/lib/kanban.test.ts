@@ -1,10 +1,13 @@
 import {
+  boardToExportRows,
   cardMatchesQuery,
   formatLabels,
   isOverdue,
   labelAccent,
   moveCard,
   parseLabels,
+  rowsToCsv,
+  type BoardData,
   type Card,
   type Column,
 } from "@/lib/kanban";
@@ -16,6 +19,81 @@ const baseCard: Card = {
   dueDate: "",
   labels: ["bug", "urgent"],
 };
+
+describe("boardToExportRows", () => {
+  it("flattens columns and cards in board order", () => {
+    const board: BoardData = {
+      id: 1,
+      name: "Board",
+      columns: [
+        { id: 10, title: "Backlog", cardIds: [1, 2] },
+        { id: 20, title: "Done", cardIds: [] },
+      ],
+      cards: {
+        1: baseCard,
+        2: {
+          id: 2,
+          title: "Ship it",
+          details: "",
+          dueDate: "2026-05-01",
+          labels: [],
+        },
+      },
+    };
+
+    expect(boardToExportRows(board)).toEqual([
+      {
+        column: "Backlog",
+        title: "Fix login bug",
+        details: "Users can't sign in on Safari",
+        dueDate: "",
+        labels: "bug,urgent",
+      },
+      {
+        column: "Backlog",
+        title: "Ship it",
+        details: "",
+        dueDate: "2026-05-01",
+        labels: "",
+      },
+    ]);
+  });
+});
+
+describe("rowsToCsv", () => {
+  it("writes a header row followed by one row per card", () => {
+    const csv = rowsToCsv([
+      {
+        column: "Backlog",
+        title: "Simple card",
+        details: "No special characters",
+        dueDate: "2026-05-01",
+        labels: "bug",
+      },
+    ]);
+
+    expect(csv).toBe(
+      "Column,Title,Details,Due Date,Labels\r\n" +
+        "Backlog,Simple card,No special characters,2026-05-01,bug"
+    );
+  });
+
+  it("quotes fields containing commas, quotes, or newlines", () => {
+    const csv = rowsToCsv([
+      {
+        column: "Backlog",
+        title: 'Card with "quotes", a comma, and a\nnewline',
+        details: "",
+        dueDate: "",
+        labels: "",
+      },
+    ]);
+
+    expect(csv).toContain(
+      '"Card with ""quotes"", a comma, and a\nnewline"'
+    );
+  });
+});
 
 describe("cardMatchesQuery", () => {
   it("matches everything for an empty or whitespace-only query", () => {
