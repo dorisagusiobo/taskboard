@@ -1,5 +1,7 @@
 # Project Management MVP Delivery Plan
 
+This document is the historical build plan for the original 10-part MVP (single hardcoded credential, one board per user). It is kept as a record of that build, not as current documentation — the project has since undergone the architecture pivot described in `CLAUDE.md`'s "Post-MVP architecture pivot" note (real self-service accounts, multi-board-per-user, due dates, labels, search, export). Where this document says "hardcoded," "one board per user," or similar, read it as "true at the time Part 10 shipped," not as a current constraint; see `CLAUDE.md`, `backend/AGENTS.md`, and `frontend/AGENTS.md` for the current architecture.
+
 ## Delivery rules
 
 - Complete the parts below in order.
