@@ -14,11 +14,13 @@ from starlette.responses import JSONResponse
 
 from ai_service import AIChatRequest, AIResponseError, AIService
 from database import (
+    DEFAULT_BOARD_NAME,
     BoardNotFoundError,
     BoardStore,
     CardNotFoundError,
     ColumnNotFoundError,
     InvalidPositionError,
+    LastBoardError,
     UsernameTakenError,
 )
 from openrouter_client import (
@@ -39,6 +41,9 @@ DEFAULT_SEED_PASSWORD = "password"
 DEFAULT_SESSION_SECRET = secrets.token_urlsafe(32)
 
 ColumnTitle = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+]
+BoardName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
 ]
 CardTitle = Annotated[
@@ -87,7 +92,22 @@ class ColumnResponse(BaseModel):
 
 class BoardResponse(BaseModel):
     id: int
+    name: str
     columns: list[ColumnResponse]
+
+
+class BoardSummary(BaseModel):
+    id: int
+    name: str
+    position: int
+
+
+class CreateBoardRequest(BaseModel):
+    name: BoardName = DEFAULT_BOARD_NAME
+
+
+class RenameBoardRequest(BaseModel):
+    name: BoardName
 
 
 class RenameColumnRequest(BaseModel):
@@ -167,6 +187,12 @@ def create_app(
     def handle_invalid_position(_request: Request, _error: InvalidPositionError):
         return JSONResponse(status_code=422, content={"detail": "Invalid position"})
 
+    @app.exception_handler(LastBoardError)
+    def handle_last_board(_request: Request, _error: LastBoardError):
+        return JSONResponse(
+            status_code=409, content={"detail": "Cannot delete your last board"}
+        )
+
     def authenticated_username(request: Request) -> str:
         username = request.session.get("username")
         if not username:
@@ -220,55 +246,92 @@ def create_app(
         request.session.clear()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @app.get("/api/board", response_model=BoardResponse)
-    def get_board(request: Request):
-        return board_store.get_board(authenticated_username(request))
-
-    @app.patch("/api/board/columns/{column_id}", response_model=BoardResponse)
-    def rename_column(column_id: int, payload: RenameColumnRequest, request: Request):
-        return board_store.rename_column(
-            authenticated_username(request), column_id, payload.title
-        )
+    @app.get("/api/boards", response_model=list[BoardSummary])
+    def list_boards(request: Request):
+        return board_store.list_boards(authenticated_username(request))
 
     @app.post(
-        "/api/board/cards",
+        "/api/boards",
         response_model=BoardResponse,
         status_code=status.HTTP_201_CREATED,
     )
-    def create_card(payload: CreateCardRequest, request: Request):
+    def create_board(payload: CreateBoardRequest, request: Request):
+        return board_store.create_board(authenticated_username(request), payload.name)
+
+    @app.get("/api/boards/{board_id}", response_model=BoardResponse)
+    def get_board(board_id: int, request: Request):
+        return board_store.get_board(authenticated_username(request), board_id)
+
+    @app.patch("/api/boards/{board_id}", response_model=BoardResponse)
+    def rename_board(board_id: int, payload: RenameBoardRequest, request: Request):
+        return board_store.rename_board(
+            authenticated_username(request), board_id, payload.name
+        )
+
+    @app.delete("/api/boards/{board_id}", response_model=list[BoardSummary])
+    def delete_board(board_id: int, request: Request):
+        return board_store.delete_board(authenticated_username(request), board_id)
+
+    @app.patch(
+        "/api/boards/{board_id}/columns/{column_id}", response_model=BoardResponse
+    )
+    def rename_column(
+        board_id: int, column_id: int, payload: RenameColumnRequest, request: Request
+    ):
+        return board_store.rename_column(
+            authenticated_username(request), board_id, column_id, payload.title
+        )
+
+    @app.post(
+        "/api/boards/{board_id}/cards",
+        response_model=BoardResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def create_card(board_id: int, payload: CreateCardRequest, request: Request):
         return board_store.create_card(
             authenticated_username(request),
+            board_id,
             payload.column_id,
             payload.title,
             payload.details,
         )
 
-    @app.patch("/api/board/cards/{card_id}", response_model=BoardResponse)
-    def update_card(card_id: int, payload: UpdateCardRequest, request: Request):
+    @app.patch("/api/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)
+    def update_card(
+        board_id: int, card_id: int, payload: UpdateCardRequest, request: Request
+    ):
         return board_store.update_card(
             authenticated_username(request),
+            board_id,
             card_id,
             title=payload.title,
             details=payload.details,
         )
 
-    @app.delete("/api/board/cards/{card_id}", response_model=BoardResponse)
-    def delete_card(card_id: int, request: Request):
-        return board_store.delete_card(authenticated_username(request), card_id)
+    @app.delete("/api/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)
+    def delete_card(board_id: int, card_id: int, request: Request):
+        return board_store.delete_card(
+            authenticated_username(request), board_id, card_id
+        )
 
-    @app.post("/api/board/cards/{card_id}/move", response_model=BoardResponse)
-    def move_card(card_id: int, payload: MoveCardRequest, request: Request):
+    @app.post(
+        "/api/boards/{board_id}/cards/{card_id}/move", response_model=BoardResponse
+    )
+    def move_card(
+        board_id: int, card_id: int, payload: MoveCardRequest, request: Request
+    ):
         return board_store.move_card(
             authenticated_username(request),
+            board_id,
             card_id,
             payload.column_id,
             payload.position,
         )
 
-    @app.post("/api/ai/chat", response_model=AIChatResponse)
-    def ai_chat(payload: AIChatRequest, request: Request):
+    @app.post("/api/boards/{board_id}/ai/chat", response_model=AIChatResponse)
+    def ai_chat(board_id: int, payload: AIChatRequest, request: Request):
         username = authenticated_username(request)
-        board = board_store.get_board(username)
+        board = board_store.get_board(username, board_id)
         try:
             ai_response = AIService(resolved_openrouter_client_factory()).respond(
                 board,
@@ -297,6 +360,7 @@ def create_app(
         try:
             updated_board = board_store.apply_board_operations(
                 username,
+                board_id,
                 [operation.model_dump() for operation in ai_response.operations],
             )
         except (

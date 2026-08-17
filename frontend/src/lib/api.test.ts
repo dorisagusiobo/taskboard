@@ -42,11 +42,11 @@ describe("API client", () => {
   it("sends move requests and returns the canonical response", async () => {
     fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
 
-    const board = await moveCard(101, 20, 0);
+    const board = await moveCard(1, 101, 20, 0);
 
     expect(board.id).toBe(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/board/cards/101/move",
+      "/api/boards/1/cards/101/move",
       expect.objectContaining({
         credentials: "same-origin",
         method: "POST",
@@ -61,7 +61,7 @@ describe("API client", () => {
       .mockResolvedValueOnce(response(500, { detail: "Database unavailable" }));
 
     await expect(logout()).resolves.toBeUndefined();
-    await expect(getBoard()).rejects.toEqual(
+    await expect(getBoard(1)).rejects.toEqual(
       new ApiError("Database unavailable", 500)
     );
   });
@@ -75,7 +75,7 @@ describe("API client", () => {
       },
     } as unknown as Response);
 
-    await expect(getBoard()).rejects.toEqual(
+    await expect(getBoard(1)).rejects.toEqual(
       new ApiError("Request failed with status 502", 502)
     );
   });
@@ -89,10 +89,10 @@ describe("API client", () => {
       content: `Message ${index}`,
     }));
 
-    await sendAIMessage("Current request", history);
+    await sendAIMessage(1, "Current request", history);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/ai/chat",
+      "/api/boards/1/ai/chat",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({

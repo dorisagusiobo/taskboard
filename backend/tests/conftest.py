@@ -29,3 +29,9 @@ def authenticated_client(client: TestClient) -> TestClient:
     )
     assert response.status_code == 200
     return client
+
+
+@pytest.fixture
+def board_id(authenticated_client: TestClient) -> int:
+    boards = authenticated_client.get("/api/boards").json()
+    return boards[0]["id"]

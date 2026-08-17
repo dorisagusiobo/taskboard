@@ -29,18 +29,19 @@ def find_card(board: dict, title: str) -> tuple[dict, dict]:
 
 
 def test_seeded_board_is_available_only_after_authentication(
-    client: TestClient, authenticated_client: TestClient
+    client: TestClient, authenticated_client: TestClient, board_id: int
 ):
     client.cookies.clear()
-    assert client.get("/api/board").status_code == 401
+    assert client.get(f"/api/boards/{board_id}").status_code == 401
 
     authenticated_client.post(
         "/api/auth/login", json={"username": "user", "password": "password"}
     )
-    response = authenticated_client.get("/api/board")
+    response = authenticated_client.get(f"/api/boards/{board_id}")
 
     assert response.status_code == 200
     board = response.json()
+    assert board["name"] == "Board"
     assert [column["title"] for column in board["columns"]] == [
         "Backlog",
         "Discovery",
@@ -56,17 +57,17 @@ def test_seeded_board_is_available_only_after_authentication(
 @pytest.mark.parametrize(
     ("method", "path", "payload"),
     [
-        ("patch", "/api/board/columns/1", {"title": "Blocked"}),
+        ("patch", "/api/boards/1/columns/1", {"title": "Blocked"}),
         (
             "post",
-            "/api/board/cards",
+            "/api/boards/1/cards",
             {"column_id": 1, "title": "Blocked", "details": ""},
         ),
-        ("patch", "/api/board/cards/1", {"title": "Blocked"}),
-        ("delete", "/api/board/cards/1", None),
+        ("patch", "/api/boards/1/cards/1", {"title": "Blocked"}),
+        ("delete", "/api/boards/1/cards/1", None),
         (
             "post",
-            "/api/board/cards/1/move",
+            "/api/boards/1/cards/1/move",
             {"column_id": 2, "position": 0},
         ),
     ],
@@ -81,13 +82,13 @@ def test_every_board_mutation_requires_authentication(
 
 
 def test_rename_column_persists_after_app_restart(
-    authenticated_client: TestClient, database_path: Path
+    authenticated_client: TestClient, database_path: Path, board_id: int
 ):
-    board = authenticated_client.get("/api/board").json()
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
     column_id = board["columns"][0]["id"]
 
     response = authenticated_client.patch(
-        f"/api/board/columns/{column_id}", json={"title": "Ideas"}
+        f"/api/boards/{board_id}/columns/{column_id}", json={"title": "Ideas"}
     )
     assert response.status_code == 200
     assert response.json()["columns"][0]["title"] == "Ideas"
@@ -100,18 +101,18 @@ def test_rename_column_persists_after_app_restart(
         restarted_client.post(
             "/api/auth/login", json={"username": "user", "password": "password"}
         )
-        reloaded = restarted_client.get("/api/board").json()
+        reloaded = restarted_client.get(f"/api/boards/{board_id}").json()
 
     assert reloaded["columns"][0]["title"] == "Ideas"
     assert card_count(reloaded) == 8
 
 
-def test_create_edit_and_delete_card(authenticated_client: TestClient):
-    board = authenticated_client.get("/api/board").json()
+def test_create_edit_and_delete_card(authenticated_client: TestClient, board_id: int):
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
     column_id = board["columns"][0]["id"]
 
     created_response = authenticated_client.post(
-        "/api/board/cards",
+        f"/api/boards/{board_id}/cards",
         json={
             "column_id": column_id,
             "title": "  New card  ",
@@ -125,20 +126,24 @@ def test_create_edit_and_delete_card(authenticated_client: TestClient):
     assert card_count(created_board) == 9
 
     details_response = authenticated_client.patch(
-        f"/api/board/cards/{created['id']}", json={"details": "Updated details"}
+        f"/api/boards/{board_id}/cards/{created['id']}",
+        json={"details": "Updated details"},
     )
     assert details_response.status_code == 200
     _, updated_details = find_card(details_response.json(), "New card")
     assert updated_details["details"] == "Updated details"
 
     title_response = authenticated_client.patch(
-        f"/api/board/cards/{created['id']}", json={"title": "Renamed card"}
+        f"/api/boards/{board_id}/cards/{created['id']}",
+        json={"title": "Renamed card"},
     )
     assert title_response.status_code == 200
     _, updated_title = find_card(title_response.json(), "Renamed card")
     assert updated_title["details"] == "Updated details"
 
-    deleted_response = authenticated_client.delete(f"/api/board/cards/{created['id']}")
+    deleted_response = authenticated_client.delete(
+        f"/api/boards/{board_id}/cards/{created['id']}"
+    )
     assert deleted_response.status_code == 200
     deleted_board = deleted_response.json()
     assert card_count(deleted_board) == 8
@@ -148,16 +153,16 @@ def test_create_edit_and_delete_card(authenticated_client: TestClient):
 
 
 def test_reorders_and_moves_cards_transactionally(
-    authenticated_client: TestClient, database_path: Path
+    authenticated_client: TestClient, database_path: Path, board_id: int
 ):
-    board = authenticated_client.get("/api/board").json()
+    board = authenticated_client.get(f"/api/boards/{board_id}").json()
     source = board["columns"][0]
     target = board["columns"][1]
     moved_card = source["cards"][0]
     original_target_ids = [card["id"] for card in target["cards"]]
 
     reordered_response = authenticated_client.post(
-        f"/api/board/cards/{moved_card['id']}/move",
+        f"/api/boards/{board_id}/cards/{moved_card['id']}/move",
         json={"column_id": source["id"], "position": 1},
     )
     assert reordered_response.status_code == 200
@@ -165,7 +170,7 @@ def test_reorders_and_moves_cards_transactionally(
     assert [card["id"] for card in reordered_source["cards"]][1] == moved_card["id"]
 
     moved_response = authenticated_client.post(
-        f"/api/board/cards/{moved_card['id']}/move",
+        f"/api/boards/{board_id}/cards/{moved_card['id']}/move",
         json={"column_id": target["id"], "position": 0},
     )
     assert moved_response.status_code == 200
@@ -176,51 +181,55 @@ def test_reorders_and_moves_cards_transactionally(
     ]
     assert card_positions_are_contiguous(moved_board)
 
-    reloaded = BoardStore(database_path).get_board("user")
+    reloaded = BoardStore(database_path).get_board("user", board_id)
     assert reloaded == moved_board
 
 
 def test_validation_and_missing_resources_do_not_change_the_board(
-    authenticated_client: TestClient,
+    authenticated_client: TestClient, board_id: int
 ):
-    original = authenticated_client.get("/api/board").json()
+    original = authenticated_client.get(f"/api/boards/{board_id}").json()
     column_id = original["columns"][0]["id"]
     card_id = original["columns"][0]["cards"][0]["id"]
 
     failures = [
         authenticated_client.patch(
-            "/api/board/columns/99999", json={"title": "Missing"}
+            f"/api/boards/{board_id}/columns/99999", json={"title": "Missing"}
         ),
         authenticated_client.patch(
-            f"/api/board/columns/{column_id}", json={"title": "   "}
+            f"/api/boards/{board_id}/columns/{column_id}", json={"title": "   "}
         ),
         authenticated_client.post(
-            "/api/board/cards", json={"column_id": 99999, "title": "Missing"}
+            f"/api/boards/{board_id}/cards",
+            json={"column_id": 99999, "title": "Missing"},
         ),
         authenticated_client.post(
-            "/api/board/cards", json={"column_id": column_id, "title": ""}
+            f"/api/boards/{board_id}/cards",
+            json={"column_id": column_id, "title": ""},
         ),
-        authenticated_client.patch("/api/board/cards/99999", json={"title": "X"}),
-        authenticated_client.patch(f"/api/board/cards/{card_id}", json={}),
-        authenticated_client.delete("/api/board/cards/99999"),
+        authenticated_client.patch(
+            f"/api/boards/{board_id}/cards/99999", json={"title": "X"}
+        ),
+        authenticated_client.patch(f"/api/boards/{board_id}/cards/{card_id}", json={}),
+        authenticated_client.delete(f"/api/boards/{board_id}/cards/99999"),
         authenticated_client.post(
-            "/api/board/cards/99999/move",
+            f"/api/boards/{board_id}/cards/99999/move",
             json={"column_id": column_id, "position": 0},
         ),
         authenticated_client.post(
-            f"/api/board/cards/{card_id}/move",
+            f"/api/boards/{board_id}/cards/{card_id}/move",
             json={"column_id": 99999, "position": 0},
         ),
         authenticated_client.post(
-            f"/api/board/cards/{card_id}/move",
+            f"/api/boards/{board_id}/cards/{card_id}/move",
             json={"column_id": column_id, "position": 999},
         ),
         authenticated_client.post(
-            f"/api/board/cards/{card_id}/move",
+            f"/api/boards/{board_id}/cards/{card_id}/move",
             json={"column_id": original["columns"][1]["id"], "position": 999},
         ),
         authenticated_client.post(
-            f"/api/board/cards/{card_id}/move",
+            f"/api/boards/{board_id}/cards/{card_id}/move",
             json={"column_id": column_id, "position": -1},
         ),
     ]
@@ -239,60 +248,63 @@ def test_validation_and_missing_resources_do_not_change_the_board(
         422,
         422,
     ]
-    assert authenticated_client.get("/api/board").json() == original
+    assert authenticated_client.get(f"/api/boards/{board_id}").json() == original
 
 
 def test_missing_board_returns_a_controlled_404(
-    authenticated_client: TestClient, database_path: Path
+    authenticated_client: TestClient, database_path: Path, board_id: int
 ):
     connection = sqlite3.connect(database_path)
     connection.execute("PRAGMA foreign_keys = ON")
     try:
-        connection.execute(
-            """
-            DELETE FROM boards
-            WHERE user_id = (SELECT id FROM users WHERE username = 'user')
-            """
-        )
+        connection.execute("DELETE FROM boards WHERE id = ?", (board_id,))
         connection.commit()
     finally:
         connection.close()
 
-    response = authenticated_client.get("/api/board")
+    response = authenticated_client.get(f"/api/boards/{board_id}")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Board not found"}
 
 
 def test_other_users_resources_are_not_accessible(
-    authenticated_client: TestClient, database_path: Path
+    authenticated_client: TestClient, database_path: Path, board_id: int
 ):
     store = BoardStore(database_path)
     store.register_user("other", "password")
-    user_board = authenticated_client.get("/api/board").json()
-    other_board = store.get_board("other")
+    user_board = authenticated_client.get(f"/api/boards/{board_id}").json()
+    other_boards = store.list_boards("other")
+    other_board = store.get_board("other", other_boards[0]["id"])
     other_column = other_board["columns"][0]
     other_card = other_column["cards"][0]
     user_card = user_board["columns"][0]["cards"][0]
 
     responses = [
         authenticated_client.patch(
-            f"/api/board/columns/{other_column['id']}", json={"title": "Stolen"}
+            f"/api/boards/{board_id}/columns/{other_column['id']}",
+            json={"title": "Stolen"},
         ),
         authenticated_client.post(
-            "/api/board/cards",
+            f"/api/boards/{board_id}/cards",
             json={"column_id": other_column["id"], "title": "Stolen"},
         ),
         authenticated_client.patch(
-            f"/api/board/cards/{other_card['id']}", json={"title": "Stolen"}
+            f"/api/boards/{board_id}/cards/{other_card['id']}",
+            json={"title": "Stolen"},
         ),
-        authenticated_client.delete(f"/api/board/cards/{other_card['id']}"),
+        authenticated_client.delete(f"/api/boards/{board_id}/cards/{other_card['id']}"),
         authenticated_client.post(
-            f"/api/board/cards/{user_card['id']}/move",
+            f"/api/boards/{board_id}/cards/{user_card['id']}/move",
             json={"column_id": other_column["id"], "position": 0},
         ),
+        authenticated_client.get(f"/api/boards/{other_board['id']}"),
+        authenticated_client.patch(
+            f"/api/boards/{other_board['id']}", json={"name": "Stolen"}
+        ),
+        authenticated_client.delete(f"/api/boards/{other_board['id']}"),
     ]
 
     assert all(response.status_code == 404 for response in responses)
-    assert authenticated_client.get("/api/board").json() == user_board
-    assert store.get_board("other") == other_board
+    assert authenticated_client.get(f"/api/boards/{board_id}").json() == user_board
+    assert store.get_board("other", other_board["id"]) == other_board

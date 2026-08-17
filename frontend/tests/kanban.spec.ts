@@ -108,6 +108,52 @@ test("keeps the session on refresh and signs out", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });
 
+test("creates, renames, switches, and deletes boards", async ({ page }) => {
+  await login(page);
+
+  await expect(page.getByRole("button", { name: "Board", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete Board" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "New board" }).click();
+  await page.getByLabel("New board name").fill("Second board");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards$/, "POST"),
+    page.getByRole("button", { name: "Create board" }).click(),
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Second board", exact: true })
+  ).toBeVisible();
+  await expect(page.locator('[data-testid^="card-"]')).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Rename Second board" }).click();
+  await page.getByLabel("Rename board Second board").fill("Renamed board");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+$/, "PATCH"),
+    page.getByRole("button", { name: "Save board name" }).click(),
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Renamed board", exact: true })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  await expect(page.locator('[data-testid^="card-"]')).toHaveCount(8);
+
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+$/, "DELETE"),
+    page.getByRole("button", { name: "Delete Renamed board" }).click(),
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Renamed board", exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Delete Board" })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Renamed board", exact: true })
+  ).toHaveCount(0);
+});
+
 test("persists every board mutation through the API", async ({ page }) => {
   await login(page);
   const columns = page.locator('[data-testid^="column-"]');
@@ -136,7 +182,7 @@ test("persists every board mutation through the API", async ({ page }) => {
   });
   await columnTitle.fill("Persistent ideas");
   await Promise.all([
-    waitForMutation(page, /\/api\/board\/columns\/\d+$/, "PATCH"),
+    waitForMutation(page, /\/api\/boards\/\d+\/columns\/\d+$/, "PATCH"),
     firstColumn.getByLabel("Save column title").click(),
   ]);
   await expect(columnTitle).toHaveValue("Persistent ideas");
@@ -145,7 +191,7 @@ test("persists every board mutation through the API", async ({ page }) => {
   await firstColumn.getByLabel("New card title").fill("Integration card");
   await firstColumn.getByLabel("New card details").fill("Created in the browser");
   await Promise.all([
-    waitForMutation(page, /\/api\/board\/cards$/, "POST"),
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
     firstColumn.getByRole("button", { name: "Add card" }).click(),
   ]);
 
@@ -162,7 +208,7 @@ test("persists every board mutation through the API", async ({ page }) => {
   await editingCard.getByLabel("Card title").fill("Persistent card");
   await editingCard.getByLabel("Card details").fill("Updated through the API");
   await Promise.all([
-    waitForMutation(page, /\/api\/board\/cards\/\d+$/, "PATCH"),
+    waitForMutation(page, /\/api\/boards\/\d+\/cards\/\d+$/, "PATCH"),
     editingCard.getByRole("button", { name: "Save card" }).click(),
   ]);
 
@@ -171,7 +217,7 @@ test("persists every board mutation through the API", async ({ page }) => {
     .filter({ hasText: "Persistent card" });
   const moveToSecondColumn = waitForMutation(
     page,
-    /\/api\/board\/cards\/\d+\/move$/,
+    /\/api\/boards\/\d+\/cards\/\d+\/move$/,
     "POST"
   );
   await dragWithKeyboard(
@@ -194,7 +240,7 @@ test("persists every board mutation through the API", async ({ page }) => {
   const direction = originalIndex === 0 ? "ArrowDown" : "ArrowUp";
   const reorder = waitForMutation(
     page,
-    /\/api\/board\/cards\/\d+\/move$/,
+    /\/api\/boards\/\d+\/cards\/\d+\/move$/,
     "POST"
   );
   await dragWithKeyboard(
@@ -215,7 +261,7 @@ test("persists every board mutation through the API", async ({ page }) => {
   const deletedCard = firstColumn.locator('[data-testid^="card-"]').first();
   const deletedCardId = await deletedCard.getAttribute("data-testid");
   await Promise.all([
-    waitForMutation(page, /\/api\/board\/cards\/\d+$/, "DELETE"),
+    waitForMutation(page, /\/api\/boards\/\d+\/cards\/\d+$/, "DELETE"),
     deletedCard.getByRole("button", { name: /^Delete / }).click(),
   ]);
   if (deletedCardId) {
@@ -250,7 +296,7 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
     .getByLabel("New card details")
     .fill("Manual edit in the complete flow");
   await Promise.all([
-    waitForMutation(page, /\/api\/board\/cards$/, "POST"),
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
     firstColumn.getByRole("button", { name: "Add card" }).click(),
   ]);
   await expect(page.getByText("Manual before AI")).toBeVisible();
@@ -262,7 +308,7 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
 
   await message.fill("Summarize the board without changes");
   await Promise.all([
-    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    waitForMutation(page, /\/api\/boards\/\d+\/ai\/chat$/, "POST"),
     dialog.getByRole("button", { name: "Send" }).click(),
   ]);
   await expect(
@@ -271,14 +317,14 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
 
   await message.fill("Make a single AI change");
   await Promise.all([
-    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    waitForMutation(page, /\/api\/boards\/\d+\/ai\/chat$/, "POST"),
     dialog.getByRole("button", { name: "Send" }).click(),
   ]);
   await expect(page.getByText("AI single card")).toBeVisible();
 
   await message.fill("Make multiple AI changes");
   await Promise.all([
-    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    waitForMutation(page, /\/api\/boards\/\d+\/ai\/chat$/, "POST"),
     dialog.getByRole("button", { name: "Send" }).click(),
   ]);
   await expect(page.getByText("AI edited card")).toBeVisible();
@@ -287,7 +333,7 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
   await message.fill("Return a malformed response");
   const malformedResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === "/api/ai/chat" &&
+      new URL(response.url()).pathname.endsWith("/ai/chat") &&
       response.status() === 502
   );
   await dialog.getByRole("button", { name: "Send" }).click();
@@ -301,14 +347,14 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
   await message.fill("Fail once then summarize");
   const firstAttempt = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === "/api/ai/chat" &&
+      new URL(response.url()).pathname.endsWith("/ai/chat") &&
       response.status() === 502
   );
   await dialog.getByRole("button", { name: "Send" }).click();
   await firstAttempt;
   await expect(message).toHaveValue("Fail once then summarize");
   await Promise.all([
-    waitForMutation(page, /\/api\/ai\/chat$/, "POST"),
+    waitForMutation(page, /\/api\/boards\/\d+\/ai\/chat$/, "POST"),
     dialog.getByRole("button", { name: "Send" }).click(),
   ]);
   await expect(message).toHaveValue("");

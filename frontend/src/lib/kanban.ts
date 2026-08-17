@@ -12,6 +12,7 @@ export type Column = {
 
 export type BoardData = {
   id: number;
+  name: string;
   columns: Column[];
   cards: Record<number, Card>;
 };

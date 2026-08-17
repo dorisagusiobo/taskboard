@@ -54,13 +54,30 @@
         {
           "name": "user_id",
           "type": "INTEGER",
-          "nullable": false
+          "nullable": false,
+          "description": "Not unique: a user may own any number of boards."
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "Board"
+        },
+        {
+          "name": "position",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": 0
         }
       ],
       "constraints": [
         {
           "type": "unique",
-          "columns": ["user_id"]
+          "columns": ["user_id", "position"]
+        },
+        {
+          "type": "check",
+          "expression": "length(trim(name)) > 0"
         },
         {
           "type": "foreign_key",
@@ -259,14 +276,15 @@
         }
       ]
     },
-    "behavior": "BoardStore.ensure_seed_account registers this account only when the users table is completely empty (fresh install). Beyond that, POST /api/auth/register (BoardStore.register_user) is the only way a user and board are created: it rejects an already-taken username (UsernameTakenError / HTTP 409) rather than reusing it, and always seeds a fresh board in the same transaction. Never reseed or overwrite an existing user's board or password."
+    "behavior": "BoardStore.ensure_seed_account registers this account only when the users table is completely empty (fresh install). Beyond that, POST /api/auth/register (BoardStore.register_user) is the only way a user is created: it rejects an already-taken username (UsernameTakenError / HTTP 409) rather than reusing it, and always seeds this user's first board (five columns plus these demo cards) in the same transaction. Never reseed or overwrite an existing user's board or password. Subsequent boards for an existing user are created via POST /api/boards (BoardStore.create_board): five fixed columns, no demo cards."
   },
   "application_invariants": [
-    "Each initialized board has exactly five columns.",
+    "Every board has exactly five columns, regardless of how many boards a user owns.",
     "Columns may be renamed but may not be created, deleted, or reordered through the API.",
     "Card positions within each column are contiguous integers beginning at zero after every committed mutation.",
-    "The authenticated session determines the user; clients never submit a user_id or board_id to select ownership.",
-    "Registering an already-taken username is rejected (HTTP 409); it never overwrites the existing account's password or board."
+    "The authenticated session determines the user; clients never submit a user_id, and a client-supplied board_id is only ever used to look up a row already proven to belong to that session's user.",
+    "Registering an already-taken username is rejected (HTTP 409); it never overwrites the existing account's password or boards.",
+    "A user always owns at least one board: DELETE /api/boards/{board_id} is rejected (HTTP 409, LastBoardError) when it is the user's only remaining board."
   ],
   "conversation_history": {
     "persistence": "none",

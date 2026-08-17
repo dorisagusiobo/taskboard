@@ -4,14 +4,17 @@ The backend is a synchronous FastAPI application using Python's standard `sqlite
 
 ## Runtime rules
 
-- Resolve the user only from the signed session. Board requests must never accept a client-selected user or board owner.
+- Resolve the user only from the signed session. Board requests must never accept a client-selected user or board owner; the `{board_id}` path param is always re-checked against that session's boards (`BoardStore._owned_board_id`), never trusted on its own.
 - Enable SQLite foreign keys on every connection.
-- Keep the five seeded columns fixed. They may be renamed but not created, deleted, or reordered through the API.
-- Return the canonical board after every successful board mutation.
+- Keep the five seeded columns fixed per board. They may be renamed but not created, deleted, or reordered through the API. This applies to every board a user creates, not just their first one.
+- A user can own any number of boards (`boards.user_id` is not unique), but never zero: `BoardStore.delete_board` raises `LastBoardError` (mapped to HTTP 409) when asked to delete a user's only remaining board.
+- A newly created board (`POST /api/boards`) seeds the fixed five columns but no demo cards — the demo cards are onboarding content for the first board only, created inside `register_user`.
+- Return the canonical board after every successful board-content mutation.
 - Keep multi-row card moves and position compaction transactional.
 - Registration (`BoardStore.register_user`) is transactional and rejects an existing username (`UsernameTakenError`, mapped to HTTP 409) rather than silently reusing it. Never overwrite an existing user's password or board.
 - Hash passwords with `auth.hash_password`/`auth.check_password` (PBKDF2-HMAC-SHA256, stdlib only). Never store or log a plaintext password, and never compare passwords with `==` — use `auth.check_password`, which is constant-time.
 - `BoardStore.ensure_seed_account` only fires when the `users` table is completely empty (fresh install), so it never collides with, or masks, real registrations.
+- `_ensure_schema` only carries a live migration for the additive `users.password_hash` column (`ALTER TABLE ... ADD COLUMN`). The `boards` table's `UNIQUE (user_id)` constraint from before multi-board support has no equivalent live migration (SQLite can't drop a constraint without a full table rebuild) — a local database created before multi-board support landed keeps single-board behavior for its existing user until that database file is deleted and reseeded. This is a deliberate simplicity-over-engineering call for a local-first personal tool, not an oversight.
 - Validate every structured AI response before applying its operations, and apply a response's full operation list in one database transaction.
 
 ## Tests

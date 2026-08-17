@@ -25,7 +25,14 @@ type ApiColumn = Omit<Column, "cardIds"> & {
 
 export type ApiBoard = {
   id: number;
+  name: string;
   columns: ApiColumn[];
+};
+
+export type BoardSummary = {
+  id: number;
+  name: string;
+  position: number;
 };
 
 export class ApiError extends Error {
@@ -85,50 +92,75 @@ export const register = (username: string, password: string) =>
 export const logout = () =>
   request<void>("/api/auth/logout", { method: "POST" });
 
-export const getBoard = () => request<ApiBoard>("/api/board");
+export const listBoards = () => request<BoardSummary[]>("/api/boards");
 
-export const renameColumn = (columnId: number, title: string) =>
+export const createBoard = (name: string) =>
+  request<ApiBoard>("/api/boards", jsonOptions("POST", { name }));
+
+export const renameBoard = (boardId: number, name: string) =>
+  request<ApiBoard>(`/api/boards/${boardId}`, jsonOptions("PATCH", { name }));
+
+export const deleteBoard = (boardId: number) =>
+  request<BoardSummary[]>(`/api/boards/${boardId}`, { method: "DELETE" });
+
+export const getBoard = (boardId: number) =>
+  request<ApiBoard>(`/api/boards/${boardId}`);
+
+export const renameColumn = (
+  boardId: number,
+  columnId: number,
+  title: string
+) =>
   request<ApiBoard>(
-    `/api/board/columns/${columnId}`,
+    `/api/boards/${boardId}/columns/${columnId}`,
     jsonOptions("PATCH", { title })
   );
 
 export const createCard = (
+  boardId: number,
   columnId: number,
   title: string,
   details: string
 ) =>
   request<ApiBoard>(
-    "/api/board/cards",
+    `/api/boards/${boardId}/cards`,
     jsonOptions("POST", { column_id: columnId, title, details })
   );
 
 export const updateCard = (
+  boardId: number,
   cardId: number,
   title: string,
   details: string
 ) =>
   request<ApiBoard>(
-    `/api/board/cards/${cardId}`,
+    `/api/boards/${boardId}/cards/${cardId}`,
     jsonOptions("PATCH", { title, details })
   );
 
-export const deleteCard = (cardId: number) =>
-  request<ApiBoard>(`/api/board/cards/${cardId}`, { method: "DELETE" });
+export const deleteCard = (boardId: number, cardId: number) =>
+  request<ApiBoard>(`/api/boards/${boardId}/cards/${cardId}`, {
+    method: "DELETE",
+  });
 
 export const moveCard = (
+  boardId: number,
   cardId: number,
   columnId: number,
   position: number
 ) =>
   request<ApiBoard>(
-    `/api/board/cards/${cardId}/move`,
+    `/api/boards/${boardId}/cards/${cardId}/move`,
     jsonOptions("POST", { column_id: columnId, position })
   );
 
-export const sendAIMessage = (message: string, history: ChatMessage[]) =>
+export const sendAIMessage = (
+  boardId: number,
+  message: string,
+  history: ChatMessage[]
+) =>
   request<AIChatResult>(
-    "/api/ai/chat",
+    `/api/boards/${boardId}/ai/chat`,
     jsonOptions("POST", { message, history: history.slice(-20) })
   );
 
@@ -144,6 +176,7 @@ export const toBoardData = (board: ApiBoard): BoardData => {
 
   return {
     id: board.id,
+    name: board.name,
     columns: board.columns.map((column) => ({
       id: column.id,
       title: column.title,

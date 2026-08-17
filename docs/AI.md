@@ -1,8 +1,8 @@
 # AI board contract
 
-The authenticated `POST /api/ai/chat` endpoint accepts a current message and up to 20 prior `user` or `assistant` messages. History remains in browser memory and is never stored in SQLite.
+The authenticated `POST /api/boards/{board_id}/ai/chat` endpoint accepts a current message and up to 20 prior `user` or `assistant` messages. History remains in browser memory and is never stored in SQLite.
 
-The backend sends the canonical authenticated user's board, history, and current message to OpenRouter using `openai/gpt-oss-120b`. It requests strict JSON Schema output and requires routing to a provider that supports the requested parameters.
+The backend sends the canonical state of that one board (re-validated as owned by the authenticated user), history, and current message to OpenRouter using `openai/gpt-oss-120b`. It requests strict JSON Schema output and requires routing to a provider that supports the requested parameters. The AI can only see and mutate the board named in the URL, not any of the user's other boards.
 
 ## Structured response
 

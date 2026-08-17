@@ -14,7 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS boards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT 'Board',
+    position INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, position),
+    CHECK (length(trim(name)) > 0),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -106,6 +110,8 @@ SEED_CARDS = (
     ),
 )
 
+DEFAULT_BOARD_NAME = "Board"
+
 
 class BoardNotFoundError(Exception):
     pass
@@ -124,6 +130,10 @@ class InvalidPositionError(Exception):
 
 
 class UsernameTakenError(Exception):
+    pass
+
+
+class LastBoardError(Exception):
     pass
 
 
@@ -175,41 +185,9 @@ class BoardStore:
             if user_id is None:
                 raise RuntimeError("User insert did not return an id")
 
-            cursor = connection.execute(
-                "INSERT INTO boards (user_id) VALUES (?)", (user_id,)
-            )
-            board_id = cursor.lastrowid
-            if board_id is None:
-                raise RuntimeError("Board insert did not return an id")
-            column_ids: dict[int, int] = {}
-            for title, position in SEED_COLUMNS:
-                cursor = connection.execute(
-                    """
-                    INSERT INTO board_columns (board_id, title, position)
-                    VALUES (?, ?, ?)
-                    """,
-                    (board_id, title, position),
-                )
-                column_id = cursor.lastrowid
-                if column_id is None:
-                    raise RuntimeError("Column insert did not return an id")
-                column_ids[position] = column_id
-
-            for column_position, position, title, details in SEED_CARDS:
-                connection.execute(
-                    """
-                    INSERT INTO cards (
-                        board_id, column_id, title, details, position
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        board_id,
-                        column_ids[column_position],
-                        title,
-                        details,
-                        position,
-                    ),
-                )
+            board_id = self._create_board_row(connection, user_id, DEFAULT_BOARD_NAME)
+            column_ids = self._seed_columns(connection, board_id)
+            self._seed_demo_cards(connection, board_id, column_ids)
             connection.commit()
         except Exception:
             connection.rollback()
@@ -239,32 +217,95 @@ class BoardStore:
             return False
         return check_password(password, row["password_hash"])
 
-    def get_board(self, username: str) -> dict[str, Any]:
+    def list_boards(self, username: str) -> list[dict[str, Any]]:
         connection = self._connect()
         try:
-            return self._load_board(connection, username)
+            return self._list_boards(connection, username)
+        finally:
+            connection.close()
+
+    def create_board(self, username: str, name: str) -> dict[str, Any]:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            user_id = self._require_user_id(connection, username)
+            board_id = self._create_board_row(connection, user_id, name)
+            self._seed_columns(connection, board_id)
+            connection.commit()
+            return self._load_board(connection, username, board_id)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def rename_board(self, username: str, board_id: int, name: str) -> dict[str, Any]:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            owned_board_id = self._owned_board_id(connection, username, board_id)
+            connection.execute(
+                "UPDATE boards SET name = ? WHERE id = ?", (name, owned_board_id)
+            )
+            connection.commit()
+            return self._load_board(connection, username, owned_board_id)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def delete_board(self, username: str, board_id: int) -> list[dict[str, Any]]:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            owned_board_id = self._owned_board_id(connection, username, board_id)
+            remaining = connection.execute(
+                """
+                SELECT count(*)
+                FROM boards
+                JOIN users ON users.id = boards.user_id
+                WHERE users.username = ?
+                """,
+                (username,),
+            ).fetchone()[0]
+            if remaining <= 1:
+                raise LastBoardError
+            connection.execute("DELETE FROM boards WHERE id = ?", (owned_board_id,))
+            connection.commit()
+            return self._list_boards(connection, username)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def get_board(self, username: str, board_id: int) -> dict[str, Any]:
+        connection = self._connect()
+        try:
+            return self._load_board(connection, username, board_id)
         finally:
             connection.close()
 
     def rename_column(
-        self, username: str, column_id: int, title: str
+        self, username: str, board_id: int, column_id: int, title: str
     ) -> dict[str, Any]:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            board_id = self._owned_board_id(connection, username)
+            owned_board_id = self._owned_board_id(connection, username, board_id)
             result = connection.execute(
                 """
                 UPDATE board_columns
                 SET title = ?
                 WHERE id = ? AND board_id = ?
                 """,
-                (title, column_id, board_id),
+                (title, column_id, owned_board_id),
             )
             if result.rowcount == 0:
                 raise ColumnNotFoundError
             connection.commit()
-            return self._load_board(connection, username)
+            return self._load_board(connection, username, owned_board_id)
         except Exception:
             connection.rollback()
             raise
@@ -274,6 +315,7 @@ class BoardStore:
     def create_card(
         self,
         username: str,
+        board_id: int,
         column_id: int,
         title: str,
         details: str,
@@ -281,10 +323,10 @@ class BoardStore:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            board_id = self._owned_board_id(connection, username)
-            self._create_card(connection, board_id, column_id, title, details)
+            owned_board_id = self._owned_board_id(connection, username, board_id)
+            self._create_card(connection, owned_board_id, column_id, title, details)
             connection.commit()
-            return self._load_board(connection, username)
+            return self._load_board(connection, username, owned_board_id)
         except Exception:
             connection.rollback()
             raise
@@ -294,6 +336,7 @@ class BoardStore:
     def update_card(
         self,
         username: str,
+        board_id: int,
         card_id: int,
         *,
         title: str | None,
@@ -302,38 +345,38 @@ class BoardStore:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            board_id = self._owned_board_id(connection, username)
+            owned_board_id = self._owned_board_id(connection, username, board_id)
             self._update_card(
                 connection,
-                board_id,
+                owned_board_id,
                 card_id,
                 title=title,
                 details=details,
             )
             connection.commit()
-            return self._load_board(connection, username)
+            return self._load_board(connection, username, owned_board_id)
         except Exception:
             connection.rollback()
             raise
         finally:
             connection.close()
 
-    def delete_card(self, username: str, card_id: int) -> dict[str, Any]:
+    def delete_card(self, username: str, board_id: int, card_id: int) -> dict[str, Any]:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            board_id = self._owned_board_id(connection, username)
-            card = self._require_card(connection, board_id, card_id)
+            owned_board_id = self._owned_board_id(connection, username, board_id)
+            card = self._require_card(connection, owned_board_id, card_id)
             column_id = card["column_id"]
             connection.execute(
                 "DELETE FROM cards WHERE id = ? AND board_id = ?",
-                (card_id, board_id),
+                (card_id, owned_board_id),
             )
             ordered_ids = self._ordered_card_ids(connection, column_id)
             self._shift_column_positions(connection, column_id)
             self._assign_positions(connection, column_id, ordered_ids)
             connection.commit()
-            return self._load_board(connection, username)
+            return self._load_board(connection, username, owned_board_id)
         except Exception:
             connection.rollback()
             raise
@@ -343,6 +386,7 @@ class BoardStore:
     def move_card(
         self,
         username: str,
+        board_id: int,
         card_id: int,
         target_column_id: int,
         target_position: int,
@@ -350,17 +394,17 @@ class BoardStore:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            board_id = self._owned_board_id(connection, username)
+            owned_board_id = self._owned_board_id(connection, username, board_id)
             self._move_card(
                 connection,
-                board_id,
+                owned_board_id,
                 card_id,
                 target_column_id,
                 target_position,
             )
 
             connection.commit()
-            return self._load_board(connection, username)
+            return self._load_board(connection, username, owned_board_id)
         except Exception:
             connection.rollback()
             raise
@@ -370,18 +414,19 @@ class BoardStore:
     def apply_board_operations(
         self,
         username: str,
+        board_id: int,
         operations: list[dict[str, Any]],
     ) -> dict[str, Any]:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            board_id = self._owned_board_id(connection, username)
+            owned_board_id = self._owned_board_id(connection, username, board_id)
             for operation in operations:
                 match operation["type"]:
                     case "create_card":
                         self._create_card(
                             connection,
-                            board_id,
+                            owned_board_id,
                             operation["column_id"],
                             operation["title"],
                             operation["details"],
@@ -389,7 +434,7 @@ class BoardStore:
                     case "edit_card":
                         self._update_card(
                             connection,
-                            board_id,
+                            owned_board_id,
                             operation["card_id"],
                             title=operation["title"],
                             details=operation["details"],
@@ -397,7 +442,7 @@ class BoardStore:
                     case "move_card":
                         self._move_card(
                             connection,
-                            board_id,
+                            owned_board_id,
                             operation["card_id"],
                             operation["column_id"],
                             operation["position"],
@@ -405,12 +450,66 @@ class BoardStore:
                     case _:
                         raise ValueError("Unsupported board operation")
             connection.commit()
-            return self._load_board(connection, username)
+            return self._load_board(connection, username, owned_board_id)
         except Exception:
             connection.rollback()
             raise
         finally:
             connection.close()
+
+    @staticmethod
+    def _create_board_row(
+        connection: sqlite3.Connection, user_id: int, name: str
+    ) -> int:
+        next_position = connection.execute(
+            "SELECT coalesce(max(position), -1) + 1 FROM boards WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()[0]
+        cursor = connection.execute(
+            "INSERT INTO boards (user_id, name, position) VALUES (?, ?, ?)",
+            (user_id, name, next_position),
+        )
+        board_id = cursor.lastrowid
+        if board_id is None:
+            raise RuntimeError("Board insert did not return an id")
+        return board_id
+
+    @staticmethod
+    def _seed_columns(connection: sqlite3.Connection, board_id: int) -> dict[int, int]:
+        column_ids: dict[int, int] = {}
+        for title, position in SEED_COLUMNS:
+            cursor = connection.execute(
+                """
+                INSERT INTO board_columns (board_id, title, position)
+                VALUES (?, ?, ?)
+                """,
+                (board_id, title, position),
+            )
+            column_id = cursor.lastrowid
+            if column_id is None:
+                raise RuntimeError("Column insert did not return an id")
+            column_ids[position] = column_id
+        return column_ids
+
+    @staticmethod
+    def _seed_demo_cards(
+        connection: sqlite3.Connection, board_id: int, column_ids: dict[int, int]
+    ) -> None:
+        for column_position, position, title, details in SEED_CARDS:
+            connection.execute(
+                """
+                INSERT INTO cards (
+                    board_id, column_id, title, details, position
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    board_id,
+                    column_ids[column_position],
+                    title,
+                    details,
+                    position,
+                ),
+            )
 
     @classmethod
     def _create_card(
@@ -513,19 +612,48 @@ class BoardStore:
         cls._assign_positions(connection, target_column_id, target_ids)
 
     @staticmethod
-    def _owned_board_id(connection: sqlite3.Connection, username: str) -> int:
+    def _require_user_id(connection: sqlite3.Connection, username: str) -> int:
+        user = connection.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if user is None:
+            raise BoardNotFoundError
+        return user["id"]
+
+    @staticmethod
+    def _owned_board_id(
+        connection: sqlite3.Connection, username: str, board_id: int
+    ) -> int:
         board = connection.execute(
             """
             SELECT boards.id
             FROM boards
             JOIN users ON users.id = boards.user_id
-            WHERE users.username = ?
+            WHERE users.username = ? AND boards.id = ?
             """,
-            (username,),
+            (username, board_id),
         ).fetchone()
         if board is None:
             raise BoardNotFoundError
         return board["id"]
+
+    @staticmethod
+    def _list_boards(
+        connection: sqlite3.Connection, username: str
+    ) -> list[dict[str, Any]]:
+        return [
+            {"id": row["id"], "name": row["name"], "position": row["position"]}
+            for row in connection.execute(
+                """
+                SELECT boards.id, boards.name, boards.position
+                FROM boards
+                JOIN users ON users.id = boards.user_id
+                WHERE users.username = ?
+                ORDER BY boards.position, boards.id
+                """,
+                (username,),
+            )
+        ]
 
     @staticmethod
     def _require_column(
@@ -598,9 +726,12 @@ class BoardStore:
 
     @classmethod
     def _load_board(
-        cls, connection: sqlite3.Connection, username: str
+        cls, connection: sqlite3.Connection, username: str, board_id: int
     ) -> dict[str, Any]:
-        board_id = cls._owned_board_id(connection, username)
+        owned_board_id = cls._owned_board_id(connection, username, board_id)
+        board_row = connection.execute(
+            "SELECT id, name FROM boards WHERE id = ?", (owned_board_id,)
+        ).fetchone()
         columns = [
             {
                 "id": row["id"],
@@ -615,7 +746,7 @@ class BoardStore:
                 WHERE board_id = ?
                 ORDER BY position, id
                 """,
-                (board_id,),
+                (owned_board_id,),
             )
         ]
         columns_by_id = {column["id"]: column for column in columns}
@@ -626,7 +757,7 @@ class BoardStore:
             WHERE board_id = ?
             ORDER BY column_id, position, id
             """,
-            (board_id,),
+            (owned_board_id,),
         ):
             columns_by_id[row["column_id"]]["cards"].append(
                 {
@@ -636,4 +767,4 @@ class BoardStore:
                     "position": row["position"],
                 }
             )
-        return {"id": board_id, "columns": columns}
+        return {"id": owned_board_id, "name": board_row["name"], "columns": columns}

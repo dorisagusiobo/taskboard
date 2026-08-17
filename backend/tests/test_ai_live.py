@@ -18,7 +18,8 @@ def test_live_structured_read_only_response(tmp_path: Path):
     require_live_test()
     store = BoardStore(tmp_path / "read-only.sqlite3")
     store.register_user("user", "password")
-    board = store.get_board("user")
+    board_id = store.list_boards("user")[0]["id"]
+    board = store.get_board("user", board_id)
 
     response = AIService(OpenRouterClient()).respond(
         board,
@@ -28,7 +29,7 @@ def test_live_structured_read_only_response(tmp_path: Path):
 
     assert response.reply
     assert response.operations == []
-    assert store.get_board("user") == board
+    assert store.get_board("user", board_id) == board
 
 
 @pytest.mark.live
@@ -36,7 +37,8 @@ def test_live_structured_create_uses_a_temporary_database(tmp_path: Path):
     require_live_test()
     store = BoardStore(tmp_path / "mutation.sqlite3")
     store.register_user("user", "password")
-    original = store.get_board("user")
+    board_id = store.list_boards("user")[0]["id"]
+    original = store.get_board("user", board_id)
     target_column = original["columns"][0]
 
     response = AIService(OpenRouterClient()).respond(
@@ -48,7 +50,9 @@ def test_live_structured_create_uses_a_temporary_database(tmp_path: Path):
         [],
     )
     updated = store.apply_board_operations(
-        "user", [operation.model_dump() for operation in response.operations]
+        "user",
+        board_id,
+        [operation.model_dump() for operation in response.operations],
     )
 
     assert len(response.operations) == 1

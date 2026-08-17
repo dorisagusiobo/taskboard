@@ -51,10 +51,16 @@ def authenticated_ai_client(ai_client: TestClient) -> TestClient:
     return ai_client
 
 
+@pytest.fixture
+def board_id(authenticated_ai_client: TestClient) -> int:
+    boards = authenticated_ai_client.get("/api/boards").json()
+    return boards[0]["id"]
+
+
 def test_ai_chat_requires_authentication_before_calling_provider(
     ai_client: TestClient, fake_openrouter_client: FakeOpenRouterClient
 ):
-    response = ai_client.post("/api/ai/chat", json={"message": "Hello"})
+    response = ai_client.post("/api/boards/1/ai/chat", json={"message": "Hello"})
 
     assert response.status_code == 401
     assert fake_openrouter_client.calls == []
@@ -63,11 +69,12 @@ def test_ai_chat_requires_authentication_before_calling_provider(
 def test_ai_chat_sends_board_history_and_returns_no_change_reply(
     authenticated_ai_client: TestClient,
     fake_openrouter_client: FakeOpenRouterClient,
+    board_id: int,
 ):
-    board = authenticated_ai_client.get("/api/board").json()
+    board = authenticated_ai_client.get(f"/api/boards/{board_id}").json()
 
     response = authenticated_ai_client.post(
-        "/api/ai/chat",
+        f"/api/boards/{board_id}/ai/chat",
         json={
             "message": "What is on the board?",
             "history": [
@@ -95,8 +102,9 @@ def test_ai_chat_sends_board_history_and_returns_no_change_reply(
 def test_ai_chat_applies_multiple_operations_and_returns_canonical_board(
     authenticated_ai_client: TestClient,
     fake_openrouter_client: FakeOpenRouterClient,
+    board_id: int,
 ):
-    board = authenticated_ai_client.get("/api/board").json()
+    board = authenticated_ai_client.get(f"/api/boards/{board_id}").json()
     source = board["columns"][0]
     target = board["columns"][1]
     edited_card = source["cards"][0]
@@ -128,7 +136,7 @@ def test_ai_chat_applies_multiple_operations_and_returns_canonical_board(
     )
 
     response = authenticated_ai_client.post(
-        "/api/ai/chat", json={"message": "Update the board"}
+        f"/api/boards/{board_id}/ai/chat", json={"message": "Update the board"}
     )
 
     assert response.status_code == 200
@@ -141,14 +149,17 @@ def test_ai_chat_applies_multiple_operations_and_returns_canonical_board(
     assert any(
         card["title"] == "AI card" for card in response_board["columns"][1]["cards"]
     )
-    assert authenticated_ai_client.get("/api/board").json() == response_board
+    assert (
+        authenticated_ai_client.get(f"/api/boards/{board_id}").json() == response_board
+    )
 
 
 def test_ai_chat_rolls_back_all_operations_for_a_stale_id(
     authenticated_ai_client: TestClient,
     fake_openrouter_client: FakeOpenRouterClient,
+    board_id: int,
 ):
-    original = authenticated_ai_client.get("/api/board").json()
+    original = authenticated_ai_client.get(f"/api/boards/{board_id}").json()
     card = original["columns"][0]["cards"][0]
     fake_openrouter_client.response = json.dumps(
         {
@@ -171,23 +182,25 @@ def test_ai_chat_rolls_back_all_operations_for_a_stale_id(
     )
 
     response = authenticated_ai_client.post(
-        "/api/ai/chat", json={"message": "Update cards"}
+        f"/api/boards/{board_id}/ai/chat", json={"message": "Update cards"}
     )
 
     assert response.status_code == 422
     assert response.json() == {"detail": "AI response could not be applied"}
-    assert authenticated_ai_client.get("/api/board").json() == original
+    assert authenticated_ai_client.get(f"/api/boards/{board_id}").json() == original
 
 
 def test_ai_chat_cannot_mutate_another_users_board(
     authenticated_ai_client: TestClient,
     fake_openrouter_client: FakeOpenRouterClient,
     database_path: Path,
+    board_id: int,
 ):
     store = BoardStore(database_path)
     store.register_user("other", "password")
-    user_board = authenticated_ai_client.get("/api/board").json()
-    other_board = store.get_board("other")
+    user_board = authenticated_ai_client.get(f"/api/boards/{board_id}").json()
+    other_board_id = store.list_boards("other")[0]["id"]
+    other_board = store.get_board("other", other_board_id)
     other_card = other_board["columns"][0]["cards"][0]
     fake_openrouter_client.response = json.dumps(
         {
@@ -204,12 +217,29 @@ def test_ai_chat_cannot_mutate_another_users_board(
     )
 
     response = authenticated_ai_client.post(
-        "/api/ai/chat", json={"message": f"Edit card {other_card['id']}"}
+        f"/api/boards/{board_id}/ai/chat",
+        json={"message": f"Edit card {other_card['id']}"},
     )
 
     assert response.status_code == 422
-    assert store.get_board("user") == user_board
-    assert store.get_board("other") == other_board
+    assert store.get_board("user", board_id) == user_board
+    assert store.get_board("other", other_board_id) == other_board
+
+
+def test_ai_chat_cannot_target_another_users_board_id(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+    database_path: Path,
+):
+    store = BoardStore(database_path)
+    store.register_user("other", "password")
+    other_board_id = store.list_boards("other")[0]["id"]
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{other_board_id}/ai/chat", json={"message": "Hello"}
+    )
+
+    assert response.status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -230,23 +260,24 @@ def test_ai_chat_cannot_mutate_another_users_board(
 def test_ai_chat_maps_provider_and_response_failures_without_changing_board(
     authenticated_ai_client: TestClient,
     fake_openrouter_client: FakeOpenRouterClient,
+    board_id: int,
     provider_response: str | None,
     provider_error: Exception | None,
     detail: str,
 ):
-    original = authenticated_ai_client.get("/api/board").json()
+    original = authenticated_ai_client.get(f"/api/boards/{board_id}").json()
     if provider_response is not None:
         fake_openrouter_client.response = provider_response
     fake_openrouter_client.error = provider_error
 
     response = authenticated_ai_client.post(
-        "/api/ai/chat", json={"message": "Update the board"}
+        f"/api/boards/{board_id}/ai/chat", json={"message": "Update the board"}
     )
 
     assert response.status_code == 502
     assert response.json() == {"detail": detail}
     assert "secret" not in response.text
-    assert authenticated_ai_client.get("/api/board").json() == original
+    assert authenticated_ai_client.get(f"/api/boards/{board_id}").json() == original
 
 
 def test_ai_chat_maps_missing_configuration(database_path: Path):
@@ -263,7 +294,10 @@ def test_ai_chat_maps_missing_configuration(database_path: Path):
         client.post(
             "/api/auth/login", json={"username": "user", "password": "password"}
         )
-        response = client.post("/api/ai/chat", json={"message": "Hello"})
+        board_id = client.get("/api/boards").json()[0]["id"]
+        response = client.post(
+            f"/api/boards/{board_id}/ai/chat", json={"message": "Hello"}
+        )
 
     assert response.status_code == 503
     assert response.json() == {"detail": "AI service is not configured"}
@@ -272,9 +306,10 @@ def test_ai_chat_maps_missing_configuration(database_path: Path):
 def test_ai_chat_rejects_more_than_twenty_history_messages_without_calling_provider(
     authenticated_ai_client: TestClient,
     fake_openrouter_client: FakeOpenRouterClient,
+    board_id: int,
 ):
     response = authenticated_ai_client.post(
-        "/api/ai/chat",
+        f"/api/boards/{board_id}/ai/chat",
         json={
             "message": "Question",
             "history": [

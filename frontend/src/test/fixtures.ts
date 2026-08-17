@@ -2,6 +2,7 @@ import type { ApiBoard } from "@/lib/api";
 
 export const apiBoard: ApiBoard = {
   id: 1,
+  name: "Board",
   columns: [
     {
       id: 10,

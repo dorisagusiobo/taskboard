@@ -10,6 +10,8 @@ const response = (status: number, body?: unknown) =>
     json: async () => body,
   }) as Response;
 
+const boardSummaries = () => [{ id: 1, name: "Board", position: 0 }];
+
 describe("AuthGate", () => {
   const fetchMock = vi.fn();
 
@@ -39,6 +41,7 @@ describe("AuthGate", () => {
   it("restores an active session", async () => {
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()));
 
     render(<AuthGate />);
@@ -68,6 +71,7 @@ describe("AuthGate", () => {
     fetchMock
       .mockResolvedValueOnce(response(401))
       .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()));
     render(<AuthGate />);
 
@@ -90,6 +94,7 @@ describe("AuthGate", () => {
   it("signs out and restores the login form", async () => {
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(204));
     render(<AuthGate />);
@@ -118,6 +123,7 @@ describe("AuthGate", () => {
     unmount();
     fetchMock
       .mockResolvedValueOnce(response(200, { username: "user" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(500));
     render(<AuthGate />);
@@ -138,6 +144,7 @@ describe("AuthGate", () => {
     fetchMock
       .mockResolvedValueOnce(response(401))
       .mockResolvedValueOnce(response(201, { username: "new-teammate" }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()));
     render(<AuthGate />);
 

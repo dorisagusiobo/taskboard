@@ -11,6 +11,8 @@ const response = (status: number, body?: unknown) =>
     json: async () => body,
   }) as Response;
 
+const boardSummaries = () => [{ id: 1, name: "Board", position: 0 }];
+
 describe("KanbanBoard", () => {
   const fetchMock = vi.fn();
   const onSessionExpired = vi.fn();
@@ -28,7 +30,9 @@ describe("KanbanBoard", () => {
     render(<KanbanBoard onSessionExpired={onSessionExpired} />);
 
   it("loads the canonical board from the API", async () => {
-    fetchMock.mockResolvedValueOnce(response(200, cloneBoard()));
+    fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
 
     renderBoard();
 
@@ -36,7 +40,10 @@ describe("KanbanBoard", () => {
     expect(await screen.findByText("Server card")).toBeVisible();
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
     expect(screen.getByDisplayValue("Server backlog")).toBeVisible();
-    expect(fetchMock).toHaveBeenCalledWith("/api/board", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/boards", {
+      credentials: "same-origin",
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/boards/1", {
       credentials: "same-origin",
     });
   });
@@ -45,6 +52,7 @@ describe("KanbanBoard", () => {
     const renamed = cloneBoard();
     renamed.columns[0].title = "Persistent ideas";
     fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(200, renamed));
     const user = userEvent.setup();
@@ -58,7 +66,7 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByDisplayValue("Persistent ideas")).toBeVisible();
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/board/columns/10",
+      "/api/boards/1/columns/10",
       expect.objectContaining({
         method: "PATCH",
         body: JSON.stringify({ title: "Persistent ideas" }),
@@ -82,6 +90,7 @@ describe("KanbanBoard", () => {
     };
     const deleted = cloneBoard();
     fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(201, added))
       .mockResolvedValueOnce(response(200, edited))
@@ -112,7 +121,7 @@ describe("KanbanBoard", () => {
     expect(await screen.findByText("Server card")).toBeVisible();
     expect(screen.queryByTestId("card-103")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/board/cards/103",
+      "/api/boards/1/cards/103",
       expect.objectContaining({ method: "DELETE" })
     );
   });
@@ -126,6 +135,7 @@ describe("KanbanBoard", () => {
       position: 2,
     });
     fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(201, added));
     const user = userEvent.setup();
@@ -141,6 +151,7 @@ describe("KanbanBoard", () => {
 
   it("retains draft input and the confirmed board when a mutation fails", async () => {
     fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(response(500, { detail: "Database unavailable" }));
     const user = userEvent.setup();
@@ -162,12 +173,13 @@ describe("KanbanBoard", () => {
   it("shows load errors, retries, and handles an expired session", async () => {
     fetchMock
       .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()));
     const user = userEvent.setup();
     const { unmount } = renderBoard();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load your board"
+      "Unable to load your boards"
     );
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Server card")).toBeVisible();
@@ -191,6 +203,7 @@ describe("KanbanBoard", () => {
       position: 2,
     });
     fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockReturnValueOnce(pendingCreate);
     const user = userEvent.setup();
@@ -204,7 +217,7 @@ describe("KanbanBoard", () => {
     const pendingButton = within(column).getByRole("button", { name: "Adding..." });
     expect(pendingButton).toBeDisabled();
     await user.click(pendingButton);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
 
     resolveCreate(response(201, added));
     expect(await screen.findByText("Only once")).toBeVisible();
@@ -219,6 +232,7 @@ describe("KanbanBoard", () => {
       position: 0,
     });
     fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
       .mockResolvedValueOnce(response(200, cloneBoard()))
       .mockResolvedValueOnce(
         response(200, { reply: "I created the card.", board: updated })
@@ -234,11 +248,120 @@ describe("KanbanBoard", () => {
     expect(await screen.findByText("I created the card.")).toBeVisible();
     expect(screen.getByText("Created by AI")).toBeVisible();
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/ai/chat",
+      "/api/boards/1/ai/chat",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ message: "Create the card", history: [] }),
       })
+    );
+  });
+
+  it("creates a new board and switches to it", async () => {
+    const createdBoard: ApiBoard = {
+      id: 2,
+      name: "Personal",
+      columns: cloneBoard().columns.map((column) => ({ ...column, cards: [] })),
+    };
+    fetchMock
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(201, createdBoard));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    await user.click(screen.getByRole("button", { name: "New board" }));
+    await user.type(screen.getByLabelText("New board name"), "Personal");
+    await user.click(screen.getByRole("button", { name: "Create board" }));
+
+    expect(await screen.findByText("Personal", { selector: "p" })).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/boards",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "Personal" }),
+      })
+    );
+  });
+
+  it("renames a board and deletes a second board", async () => {
+    const secondBoard: ApiBoard = {
+      id: 2,
+      name: "Second",
+      columns: cloneBoard().columns.map((column) => ({ ...column, cards: [] })),
+    };
+    const renamed = { id: 1, name: "Renamed board", columns: cloneBoard().columns };
+    fetchMock
+      .mockResolvedValueOnce(
+        response(200, [
+          { id: 1, name: "Board", position: 0 },
+          { id: 2, name: "Second", position: 1 },
+        ])
+      )
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(200, renamed))
+      .mockResolvedValueOnce(response(200, secondBoard))
+      .mockResolvedValueOnce(
+        response(200, [{ id: 1, name: "Renamed board", position: 0 }])
+      )
+      .mockResolvedValueOnce(response(200, renamed));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    await user.click(screen.getByRole("button", { name: "Rename Board" }));
+    const renameInput = screen.getByLabelText("Rename board Board");
+    await user.clear(renameInput);
+    await user.type(renameInput, "Renamed board");
+    await user.click(screen.getByRole("button", { name: "Save board name" }));
+
+    expect(await screen.findByText("Renamed board", { selector: "p" })).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/boards/1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ name: "Renamed board" }),
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: "Second" }));
+    await screen.findByRole("button", { name: "Delete Second" });
+    await user.click(screen.getByRole("button", { name: "Delete Second" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/boards/2",
+      expect.objectContaining({ method: "DELETE" })
+    );
+    expect(
+      await screen.findByText("Renamed board", { selector: "button" })
+    ).toBeVisible();
+  });
+
+  it("switches boards and surfaces a delete error from the API", async () => {
+    const secondBoard: ApiBoard = {
+      id: 2,
+      name: "Second",
+      columns: cloneBoard().columns.map((column) => ({ ...column, cards: [] })),
+    };
+    const twoSummaries = [
+      { id: 1, name: "Board", position: 0 },
+      { id: 2, name: "Second", position: 1 },
+    ];
+    fetchMock
+      .mockResolvedValueOnce(response(200, twoSummaries))
+      .mockResolvedValueOnce(response(200, cloneBoard()))
+      .mockResolvedValueOnce(response(200, secondBoard))
+      .mockResolvedValueOnce(response(409, { detail: "Cannot delete your last board" }));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Server card");
+    await user.click(screen.getByRole("button", { name: "Second" }));
+    expect(await screen.findByText("Second", { selector: "p" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Delete Second" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "can't delete your last board"
     );
   });
 });

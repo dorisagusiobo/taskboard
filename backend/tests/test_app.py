@@ -69,7 +69,12 @@ def test_register_creates_an_account_seeds_a_board_and_signs_in(client):
     assert session_response.status_code == 200
     assert session_response.json() == {"username": "new-teammate"}
 
-    board_response = client.get("/api/board")
+    boards_response = client.get("/api/boards")
+    assert boards_response.status_code == 200
+    boards = boards_response.json()
+    assert len(boards) == 1
+
+    board_response = client.get(f"/api/boards/{boards[0]['id']}")
     assert board_response.status_code == 200
     assert len(board_response.json()["columns"]) == 5
 

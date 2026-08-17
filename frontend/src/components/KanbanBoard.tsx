@@ -16,18 +16,24 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { AIChatSidebar } from "@/components/AIChatSidebar";
+import { BoardSwitcher } from "@/components/BoardSwitcher";
 import { ChatIcon } from "@/components/icons";
 import {
   ApiError,
+  createBoard,
   createCard,
+  deleteBoard,
   deleteCard,
   getBoard,
+  listBoards,
   moveCard as moveCardRequest,
+  renameBoard,
   renameColumn,
   sendAIMessage,
   toBoardData,
   updateCard,
   type ApiBoard,
+  type BoardSummary,
   type ChatMessage,
 } from "@/lib/api";
 import { moveCard, type BoardData } from "@/lib/kanban";
@@ -37,6 +43,7 @@ type KanbanBoardProps = {
 };
 
 export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
+  const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [board, setBoard] = useState<BoardData | null>(null);
   const [activeCardId, setActiveCardId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,22 +59,41 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const loadBoard = useCallback(async () => {
+  const loadBoard = useCallback(
+    async (boardId: number) => {
+      try {
+        setBoard(toBoardData(await getBoard(boardId)));
+      } catch (requestError) {
+        if (requestError instanceof ApiError && requestError.status === 401) {
+          onSessionExpired();
+          return;
+        }
+        setError("Unable to load your board. Please try again.");
+      }
+    },
+    [onSessionExpired]
+  );
+
+  const loadBoards = useCallback(async () => {
     setError(null);
     try {
-      setBoard(toBoardData(await getBoard()));
+      const summaries = await listBoards();
+      setBoards(summaries);
+      if (summaries.length > 0) {
+        await loadBoard(summaries[0].id);
+      }
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         onSessionExpired();
         return;
       }
-      setError("Unable to load your board. Please try again.");
+      setError("Unable to load your boards. Please try again.");
     }
-  }, [onSessionExpired]);
+  }, [loadBoard, onSessionExpired]);
 
   useEffect(() => {
-    void loadBoard();
-  }, [loadBoard]);
+    void loadBoards();
+  }, [loadBoards]);
 
   const applyMutation = async (
     mutation: () => Promise<ApiBoard>
@@ -95,18 +121,118 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
     }
   };
 
+  const handleSelectBoard = (boardId: number) => {
+    if (isMutating || boardId === board?.id) {
+      return;
+    }
+    void loadBoard(boardId);
+  };
+
+  const handleCreateBoard = async (name: string): Promise<boolean> => {
+    if (mutationInFlight.current) {
+      return false;
+    }
+    mutationInFlight.current = true;
+    setIsMutating(true);
+    setError(null);
+    try {
+      const created = await createBoard(name);
+      setBoards((current) => [
+        ...current,
+        { id: created.id, name: created.name, position: current.length },
+      ]);
+      setBoard(toBoardData(created));
+      return true;
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        onSessionExpired();
+        return false;
+      }
+      setError("Unable to create a new board. Please try again.");
+      return false;
+    } finally {
+      mutationInFlight.current = false;
+      setIsMutating(false);
+    }
+  };
+
+  const handleRenameBoard = async (
+    boardId: number,
+    name: string
+  ): Promise<boolean> => {
+    if (mutationInFlight.current) {
+      return false;
+    }
+    mutationInFlight.current = true;
+    setIsMutating(true);
+    setError(null);
+    try {
+      const renamed = await renameBoard(boardId, name);
+      setBoards((current) =>
+        current.map((summary) =>
+          summary.id === boardId ? { ...summary, name: renamed.name } : summary
+        )
+      );
+      if (board?.id === boardId) {
+        setBoard(toBoardData(renamed));
+      }
+      return true;
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        onSessionExpired();
+        return false;
+      }
+      setError("Unable to rename that board. Please try again.");
+      return false;
+    } finally {
+      mutationInFlight.current = false;
+      setIsMutating(false);
+    }
+  };
+
+  const handleDeleteBoard = async (boardId: number): Promise<boolean> => {
+    if (mutationInFlight.current) {
+      return false;
+    }
+    mutationInFlight.current = true;
+    setIsMutating(true);
+    setError(null);
+    try {
+      const remaining = await deleteBoard(boardId);
+      setBoards(remaining);
+      if (board?.id === boardId && remaining.length > 0) {
+        await loadBoard(remaining[0].id);
+      }
+      return true;
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        onSessionExpired();
+        return false;
+      }
+      if (requestError instanceof ApiError && requestError.status === 409) {
+        setError("You can't delete your last board.");
+        return false;
+      }
+      setError("Unable to delete that board. Please try again.");
+      return false;
+    } finally {
+      mutationInFlight.current = false;
+      setIsMutating(false);
+    }
+  };
+
   const handleAIMessage = async (
     message: string,
     history: ChatMessage[]
   ): Promise<string> => {
-    if (mutationInFlight.current) {
+    if (mutationInFlight.current || !board) {
       throw new Error("A board change is already in progress");
     }
 
     mutationInFlight.current = true;
     setIsMutating(true);
     try {
-      const result = await sendAIMessage(message, history);
+      const result = await sendAIMessage(board.id, message, history);
       if (result.board) {
         setBoard(toBoardData(result.board));
       }
@@ -156,6 +282,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
 
     void applyMutation(() =>
       moveCardRequest(
+        board.id,
         cardId,
         targetColumn.id,
         targetColumn.cardIds.indexOf(cardId)
@@ -176,7 +303,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
             </p>
             <button
               type="button"
-              onClick={() => void loadBoard()}
+              onClick={() => void loadBoards()}
               className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
             >
               Retry
@@ -210,7 +337,7 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
-                Single Board Kanban
+                Project workspace
               </p>
               <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
                 Kanban Studio
@@ -223,10 +350,10 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
             <div className="flex flex-col items-stretch gap-3 sm:items-end">
               <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                  Focus
+                  Viewing
                 </p>
                 <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                  One board. Five columns. Zero clutter.
+                  {board.name}
                 </p>
               </div>
               <button
@@ -240,6 +367,17 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
               </button>
             </div>
           </div>
+
+          <BoardSwitcher
+            boards={boards}
+            activeBoardId={board.id}
+            isDisabled={isMutating}
+            onSelect={handleSelectBoard}
+            onCreate={handleCreateBoard}
+            onRename={handleRenameBoard}
+            onDelete={handleDeleteBoard}
+          />
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {board.columns.map((column) => (
               <div
@@ -270,16 +408,18 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
                 cards={column.cardIds.map((cardId) => board.cards[cardId])}
                 isDisabled={isMutating}
                 onRename={(columnId, title) =>
-                  applyMutation(() => renameColumn(columnId, title))
+                  applyMutation(() => renameColumn(board.id, columnId, title))
                 }
                 onAddCard={(columnId, title, details) =>
-                  applyMutation(() => createCard(columnId, title, details))
+                  applyMutation(() =>
+                    createCard(board.id, columnId, title, details)
+                  )
                 }
                 onEditCard={(cardId, title, details) =>
-                  applyMutation(() => updateCard(cardId, title, details))
+                  applyMutation(() => updateCard(board.id, cardId, title, details))
                 }
                 onDeleteCard={(cardId) =>
-                  applyMutation(() => deleteCard(cardId))
+                  applyMutation(() => deleteCard(board.id, cardId))
                 }
               />
             ))}

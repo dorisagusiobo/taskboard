@@ -74,7 +74,7 @@ login() {
 start_container
 
 unauthenticated_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  "http://127.0.0.1:${HOST_PORT}/api/board")"
+  "http://127.0.0.1:${HOST_PORT}/api/boards")"
 if [[ "$unauthenticated_status" != "401" ]]; then
   echo "Unauthenticated board request returned $unauthenticated_status instead of 401." >&2
   exit 1
@@ -93,11 +93,26 @@ if [[ "$root_response" != *"Loading workspace"* || "$root_response" != *"/_next/
 fi
 
 login
+boards_response="$(curl --fail --silent --show-error \
+  --cookie "$COOKIE_JAR" \
+  "http://127.0.0.1:${HOST_PORT}/api/boards")"
+board_id="$(echo "$boards_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)"
+if [[ -z "$board_id" ]]; then
+  echo "Could not determine the seeded board id: $boards_response" >&2
+  exit 1
+fi
+
 board_response="$(curl --fail --silent --show-error \
   --cookie "$COOKIE_JAR" \
-  "http://127.0.0.1:${HOST_PORT}/api/board")"
+  "http://127.0.0.1:${HOST_PORT}/api/boards/${board_id}")"
 if [[ "$board_response" != *'"title":"Backlog"'* || "$board_response" != *'"title":"Done"'* ]]; then
   echo "Seeded board was not returned after login." >&2
+  exit 1
+fi
+
+column_id="$(echo "$board_response" | grep -o '"id":[0-9]*' | sed -n '2p' | cut -d: -f2)"
+if [[ -z "$column_id" ]]; then
+  echo "Could not determine the seeded board's first column id: $board_response" >&2
   exit 1
 fi
 
@@ -106,7 +121,7 @@ rename_response="$(curl --fail --silent --show-error \
   --cookie "$COOKIE_JAR" \
   --header 'Content-Type: application/json' \
   --data '{"title":"Docker persistence probe"}' \
-  "http://127.0.0.1:${HOST_PORT}/api/board/columns/1")"
+  "http://127.0.0.1:${HOST_PORT}/api/boards/${board_id}/columns/${column_id}")"
 if [[ "$rename_response" != *'"title":"Docker persistence probe"'* ]]; then
   echo "Column rename did not succeed in the smoke-test container." >&2
   exit 1
@@ -118,7 +133,7 @@ login
 
 persisted_response="$(curl --fail --silent --show-error \
   --cookie "$COOKIE_JAR" \
-  "http://127.0.0.1:${HOST_PORT}/api/board")"
+  "http://127.0.0.1:${HOST_PORT}/api/boards/${board_id}")"
 if [[ "$persisted_response" != *'"title":"Docker persistence probe"'* ]]; then
   echo "Board mutation did not persist across a container restart." >&2
   exit 1
