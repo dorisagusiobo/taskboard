@@ -9,24 +9,27 @@ import {
   ApiError,
   changePassword,
   deleteAccount,
+  getDemoAccount,
   getSession,
   login,
   logout,
   register,
+  type DemoAccount,
+  type Session,
 } from "@/lib/api";
 
 type AuthStatus = "loading" | "anonymous" | "authenticated";
 
 export const AuthGate = () => {
   const [status, setStatus] = useState<AuthStatus>("loading");
-  const [username, setUsername] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [demoAccount, setDemoAccount] = useState<DemoAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const checkSession = useCallback(async () => {
     try {
-      const session = await getSession();
-      setUsername(session.username);
+      setSession(await getSession());
       setStatus("authenticated");
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
@@ -42,12 +45,16 @@ export const AuthGate = () => {
     void checkSession();
   }, [checkSession]);
 
+  useEffect(() => {
+    // Only the public demo deployment advertises an account; elsewhere this is null.
+    getDemoAccount().then(setDemoAccount, () => setDemoAccount(null));
+  }, []);
+
   const handleLogin = async (loginUsername: string, password: string) => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const session = await login(loginUsername, password);
-      setUsername(session.username);
+      setSession(await login(loginUsername, password));
       setStatus("authenticated");
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
@@ -64,8 +71,7 @@ export const AuthGate = () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const session = await register(registerUsername, password);
-      setUsername(session.username);
+      setSession(await register(registerUsername, password));
       setStatus("authenticated");
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 409) {
@@ -89,7 +95,7 @@ export const AuthGate = () => {
     setIsSubmitting(true);
     try {
       await logout();
-      setUsername(null);
+      setSession(null);
       setStatus("anonymous");
     } catch {
       setError("Unable to sign out. Please try again.");
@@ -128,7 +134,7 @@ export const AuthGate = () => {
     setIsSubmitting(true);
     try {
       await deleteAccount(password);
-      setUsername(null);
+      setSession(null);
       setStatus("anonymous");
       return true;
     } catch (requestError) {
@@ -144,7 +150,7 @@ export const AuthGate = () => {
   };
 
   const handleSessionExpired = useCallback(() => {
-    setUsername(null);
+    setSession(null);
     setError("Your session ended. Please sign in again.");
     setStatus("anonymous");
   }, []);
@@ -162,6 +168,7 @@ export const AuthGate = () => {
   if (status === "anonymous") {
     return (
       <LoginForm
+        demoAccount={demoAccount}
         error={error}
         isSubmitting={isSubmitting}
         onLogin={handleLogin}
@@ -175,7 +182,7 @@ export const AuthGate = () => {
       <div className="relative z-20 mx-auto flex max-w-[1500px] flex-col items-end gap-2 px-6 pt-6">
         <div className="flex flex-wrap items-center justify-end gap-3 rounded-full border border-[var(--stroke)] bg-white/90 px-4 py-2 shadow-[var(--shadow)] backdrop-blur">
           <span className="text-sm text-[var(--gray-text)]">
-            Signed in as <strong className="text-[var(--navy-dark)]">{username}</strong>
+            Signed in as <strong className="text-[var(--navy-dark)]">{session?.username}</strong>
           </span>
           <button
             type="button"
@@ -186,16 +193,23 @@ export const AuthGate = () => {
             {isSubmitting ? "Signing out..." : "Sign out"}
           </button>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <ChangePasswordForm
-            isSubmitting={isSubmitting}
-            onSubmit={handleChangePassword}
-          />
-          <DeleteAccountForm
-            isSubmitting={isSubmitting}
-            onSubmit={handleDeleteAccount}
-          />
-        </div>
+        {session?.is_demo ? (
+          <p className="max-w-sm text-right text-xs text-[var(--gray-text)]">
+            You&apos;re using the shared demo account. Create your own account to change a password
+            or delete an account.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ChangePasswordForm
+              isSubmitting={isSubmitting}
+              onSubmit={handleChangePassword}
+            />
+            <DeleteAccountForm
+              isSubmitting={isSubmitting}
+              onSubmit={handleDeleteAccount}
+            />
+          </div>
+        )}
       </div>
       {error ? (
         <p className="mx-auto mt-4 max-w-xl text-center text-sm text-red-700" role="alert">

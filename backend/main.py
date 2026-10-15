@@ -144,6 +144,12 @@ class DeleteAccountRequest(BaseModel):
 
 class UserSession(BaseModel):
     username: str
+    is_demo: bool = False
+
+
+class DemoAccountResponse(BaseModel):
+    username: str
+    password: str
 
 
 class CardResponse(BaseModel):
@@ -239,7 +245,15 @@ def create_app(
     session_secret: str | None = None,
     database_path: str | Path | None = None,
     openrouter_client_factory: Callable[[], OpenRouterClient] | None = None,
+    demo_mode: bool | None = None,
 ) -> FastAPI:
+    # Public demo: the seed account is advertised on the sign-in screen and
+    # protected from password changes and deletion so it keeps working.
+    is_demo_mode = (
+        demo_mode
+        if demo_mode is not None
+        else os.getenv("DEMO_MODE", "false").lower() == "true"
+    )
     resolved_database_path = Path(
         database_path or os.getenv("DATABASE_PATH") or DEFAULT_DATABASE_PATH
     )
@@ -262,7 +276,7 @@ def create_app(
         session_cookie=SESSION_COOKIE,
         max_age=None,
         same_site="lax",
-        https_only=False,
+        https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
     )
 
     @app.exception_handler(BoardNotFoundError)
@@ -287,6 +301,19 @@ def create_app(
             status_code=409, content={"detail": "Cannot delete your last board"}
         )
 
+    def session_for(username: str) -> UserSession:
+        return UserSession(
+            username=username,
+            is_demo=is_demo_mode and username == DEFAULT_SEED_USERNAME,
+        )
+
+    def reject_demo_account_change(username: str) -> None:
+        if is_demo_mode and username == DEFAULT_SEED_USERNAME:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="The demo account can't be changed. Create your own account.",
+            )
+
     def authenticated_username(request: Request) -> str:
         username = request.session.get("username")
         if not username:
@@ -299,6 +326,14 @@ def create_app(
     @app.get("/api/health")
     def health_check():
         return {"status": "ok"}
+
+    @app.get("/api/demo-account", response_model=DemoAccountResponse | None)
+    def demo_account():
+        if not is_demo_mode:
+            return None
+        return DemoAccountResponse(
+            username=DEFAULT_SEED_USERNAME, password=DEFAULT_SEED_PASSWORD
+        )
 
     @app.post(
         "/api/auth/register",
@@ -316,7 +351,7 @@ def create_app(
 
         request.session.clear()
         request.session["username"] = payload.username
-        return UserSession(username=payload.username)
+        return session_for(payload.username)
 
     @app.post("/api/auth/login", response_model=UserSession)
     def login(credentials: LoginCredentials, request: Request):
@@ -328,12 +363,11 @@ def create_app(
 
         request.session.clear()
         request.session["username"] = credentials.username
-        return UserSession(username=credentials.username)
+        return session_for(credentials.username)
 
     @app.get("/api/auth/me", response_model=UserSession)
     def current_session(request: Request):
-        username = authenticated_username(request)
-        return UserSession(username=username)
+        return session_for(authenticated_username(request))
 
     @app.post("/api/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
     def logout(request: Request):
@@ -343,6 +377,7 @@ def create_app(
     @app.post("/api/auth/password", status_code=status.HTTP_204_NO_CONTENT)
     def change_password(payload: ChangePasswordRequest, request: Request):
         username = authenticated_username(request)
+        reject_demo_account_change(username)
         try:
             board_store.change_password(
                 username, payload.current_password, payload.new_password
@@ -357,6 +392,7 @@ def create_app(
     @app.post("/api/auth/delete-account", status_code=status.HTTP_204_NO_CONTENT)
     def delete_account(payload: DeleteAccountRequest, request: Request):
         username = authenticated_username(request)
+        reject_demo_account_change(username)
         try:
             board_store.delete_account(username, payload.password)
         except IncorrectPasswordError as error:

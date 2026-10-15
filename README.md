@@ -2,6 +2,8 @@
 
 **A kanban board with an AI assistant that organizes the work with you.**
 
+**Live demo:** _coming soon_ (sign in with the one-click demo account)
+
 Taskboard is a local-first project management app for small teams. You keep a clear five-column board, and when you'd rather describe the work than click through it, you ask the AI assistant to create, edit or move cards for you.
 
 ## Features
@@ -79,8 +81,14 @@ To stop the container:
 - The project-root `.env` file is used for runtime secrets.
 - `OPENROUTER_API_KEY` is required for AI requests and remains server-side.
 - `SESSION_SECRET` is optional for the local MVP. If omitted, the backend generates a new signing secret when it starts.
+- `DEMO_MODE=true` (public demo only) shows the seed account on the sign-in screen and blocks changing its password or deleting it, so it keeps working for every visitor. Defaults to off.
+- `COOKIE_SECURE=true` marks the session cookie HTTPS-only. Use it when served over HTTPS.
 - `DATABASE_PATH` is optional and defaults to `/app/data/project-management.sqlite3` in Docker.
 - Do not commit secrets or copy them into the Docker image.
+
+## Deploy
+
+The repo includes a [Render](https://render.com) Blueprint (`render.yaml`). In Render, choose **New > Blueprint**, connect this repository and paste your `OPENROUTER_API_KEY`. It runs on the free plan with demo mode and secure cookies on and a generated session secret. Free instances sleep when idle and the SQLite database resets on restart, so the demo board comes back fresh. Give the OpenRouter key a credit limit, since anyone can sign up and use the AI.
 
 ## Tests
 

@@ -16,7 +16,13 @@ describe("AuthGate", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
-    vi.stubGlobal("fetch", fetchMock);
+    // The demo-account lookup runs alongside the session check; answer it here
+    // so each test's queued responses stay in order.
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === "/api/demo-account"
+        ? Promise.resolve(response(200, null))
+        : fetchMock(input, init)
+    );
   });
 
   afterEach(() => {
@@ -89,6 +95,48 @@ describe("AuthGate", () => {
         body: JSON.stringify({ username: "user", password: "password" }),
       })
     );
+  });
+
+  it("offers a one-click sign-in on the public demo", async () => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === "/api/demo-account"
+        ? Promise.resolve(response(200, { username: "user", password: "password" }))
+        : fetchMock(input, init)
+    );
+    fetchMock
+      .mockResolvedValueOnce(response(401))
+      .mockResolvedValueOnce(response(200, { username: "user", is_demo: true }))
+      .mockResolvedValueOnce(response(200, boardSummaries()))
+      .mockResolvedValueOnce(response(200, cloneBoard()));
+    render(<AuthGate />);
+
+    expect(await screen.findByText("Try the demo")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Open the demo board" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Taskboard" })
+    ).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/login",
+      expect.objectContaining({
+        body: JSON.stringify({ username: "user", password: "password" }),
+      })
+    );
+    expect(screen.getByText(/shared demo account/)).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /change password/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /delete account/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the demo box outside the public demo", async () => {
+    fetchMock.mockResolvedValueOnce(response(401));
+    render(<AuthGate />);
+
+    await screen.findByRole("heading", { name: "Sign in" });
+    expect(screen.queryByText("Try the demo")).not.toBeInTheDocument();
   });
 
   it("signs out and restores the login form", async () => {

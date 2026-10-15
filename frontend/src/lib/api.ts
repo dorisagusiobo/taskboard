@@ -2,6 +2,12 @@ import { formatLabels, parseLabels, type BoardData, type Card, type Column } fro
 
 export type Session = {
   username: string;
+  is_demo: boolean;
+};
+
+export type DemoAccount = {
+  username: string;
+  password: string;
 };
 
 export type ChatMessage = {
@@ -78,6 +84,8 @@ const jsonOptions = (method: string, body: unknown): RequestInit => ({
 });
 
 export const getSession = () => request<Session>("/api/auth/me");
+
+export const getDemoAccount = () => request<DemoAccount | null>("/api/demo-account");
 
 export const login = (username: string, password: string) =>
   request<Session>(

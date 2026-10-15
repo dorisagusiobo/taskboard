@@ -465,3 +465,11 @@ def test_board_operations_reject_unsupported_changes_and_other_users_ids(
 
     assert store.get_board("user", user_board_id) == user_board
     assert store.get_board("other", other_board_id) == other_board
+
+
+def test_init_schema_creates_a_missing_data_folder(tmp_path):
+    database_path = tmp_path / "missing" / "nested" / "board.sqlite3"
+
+    BoardStore(database_path).init_schema()
+
+    assert database_path.exists()
