@@ -1,6 +1,50 @@
-# Project Management MVP
+# Taskboard
 
-This project is a local-first project management app with a FastAPI backend, a static Next.js frontend, SQLite persistence, and a single Docker container for local runtime.
+**A kanban board with an AI assistant that organizes the work with you.**
+
+Taskboard is a local-first project management app for small teams. You keep a clear five-column board, and when you'd rather describe the work than click through it, you ask the AI assistant to create, edit or move cards for you.
+
+## Features
+
+- **AI assistant.** Ask in plain language ("add a card for the launch email, due Friday, labelled marketing") and it creates, edits or moves cards on the board you have open. Every change it makes is validated before it's saved.
+- **Real accounts.** Self-service sign-up, hashed passwords, password change, and account deletion with a confirmation step.
+- **Many boards per person.** Create, rename, switch between and delete boards. Each one has the same five columns: Backlog, Discovery, In Progress, Review, Done.
+- **Due dates and labels.** Overdue cards get a red badge. Up to five labels per card, set by hand or by the assistant.
+- **Search.** Filter cards by title, details or label. Press `/` to jump to search and `Escape` to clear it.
+- **Export.** Download any board as CSV or JSON.
+
+## Design decisions
+
+- **Fixed columns.** Five well-known stages keep every board readable at a glance. Teams spend their time on the work, not on configuring the board.
+- **No setup before value.** A ready-made account and sample cards on first launch let someone try it in seconds.
+- **Destructive actions need confirmation.** Deleting an account asks for the password again, because it can't be undone.
+- **The AI proposes, the app validates.** Assistant changes go through the same validation as manual edits, so a bad model response can't corrupt a board.
+
+## How it works
+
+```
+Browser (Next.js static export)
+   │  board edits, auth, AI chat
+   ▼
+FastAPI backend ──► OpenRouter (gpt-oss-120b), structured board operations
+   │
+   ▼
+SQLite (users, boards, cards)        Single Docker container
+```
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js, React, TypeScript, Tailwind CSS |
+| Backend | Python, FastAPI, SQLite |
+| AI | OpenRouter (`openai/gpt-oss-120b`) |
+| Testing | pytest (114 tests, 97% coverage), Vitest (79 tests), Playwright end-to-end, Docker smoke tests |
+| Delivery | Docker, start/stop scripts for macOS, Linux and Windows |
+
+## Credits
+
+Taskboard started from the kanban project template in [Ed Donner](https://github.com/ed-donner)'s AI engineering course ([ed-donner/pm](https://github.com/ed-donner/pm)). The template provided a front-end-only kanban demo and the build plan. I built everything else: the FastAPI backend and database, authentication and account management, the AI assistant, multiple boards, due dates and labels, search, export, Docker packaging and the test suites.
+
+Built by **Doris Agusiobo Echianu**, AI engineer and designer. [Portfolio](https://doris-agusiobo-echianu.vercel.app) · [LinkedIn](https://www.linkedin.com/in/doris-agusiobo-echianu-83571764)
 
 ## Local run
 
