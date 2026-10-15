@@ -2,7 +2,7 @@
 
 **A kanban board with an AI assistant that organizes the work with you.**
 
-**Live demo:** _coming soon_ (sign in with the one-click demo account)
+**Live demo:** [taskboard-4yst.onrender.com](https://taskboard-4yst.onrender.com). Click **Open the demo board** to sign in. Free hosting: the first visit after a quiet spell can take about a minute to wake up.
 
 Taskboard is a local-first project management app for small teams. You keep a clear five-column board, and when you'd rather describe the work than click through it, you ask the AI assistant to create, edit or move cards for you.
 
