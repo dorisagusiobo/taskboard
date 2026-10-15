@@ -7,9 +7,9 @@ if (-not (Test-Path .env)) {
     throw "Missing .env file in project root."
 }
 
-$containerName = "project-management-mvp"
+$containerName = "taskboard"
 
-docker build -t project-management-mvp .
+docker build -t taskboard .
 if ($LASTEXITCODE -ne 0) {
     throw "Docker image build failed."
 }
@@ -24,7 +24,7 @@ docker run --rm -d `
     -p 8000:8000 `
     --env-file .env `
     -v project-management-mvp-data:/app/data `
-    project-management-mvp | Out-Null
+    taskboard | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "Docker container failed to run."
 }
