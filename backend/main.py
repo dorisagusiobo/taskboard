@@ -234,7 +234,7 @@ def create_app(
         board_store.ensure_seed_account(DEFAULT_SEED_USERNAME, DEFAULT_SEED_PASSWORD)
         yield
 
-    app = FastAPI(title="Project Management MVP", version="0.3.0", lifespan=lifespan)
+    app = FastAPI(title="Taskboard", version="0.3.0", lifespan=lifespan)
     app.state.board_store = board_store
     app.add_middleware(
         SessionMiddleware,
@@ -495,8 +495,8 @@ def create_app(
             return """
             <!doctype html>
             <html lang="en">
-              <head><meta charset="utf-8" /><title>Project Management MVP</title></head>
-              <body><h1>Project Management MVP</h1><p>API status: ok</p></body>
+              <head><meta charset="utf-8" /><title>Taskboard</title></head>
+              <body><h1>Taskboard</h1><p>API status: ok</p></body>
             </html>
             """
 

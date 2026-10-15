@@ -1,4 +1,4 @@
-# The Project Management MVP web app
+# Taskboard web app
 
 ## Business Requirements
 

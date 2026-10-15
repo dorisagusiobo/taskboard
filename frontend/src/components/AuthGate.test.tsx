@@ -34,7 +34,7 @@ describe("AuthGate", () => {
       await screen.findByRole("heading", { name: "Sign in" })
     ).toBeVisible();
     expect(
-      screen.queryByRole("heading", { name: "Kanban Studio" })
+      screen.queryByRole("heading", { name: "Taskboard" })
     ).not.toBeInTheDocument();
   });
 
@@ -47,7 +47,7 @@ describe("AuthGate", () => {
     render(<AuthGate />);
 
     expect(
-      await screen.findByRole("heading", { name: "Kanban Studio" })
+      await screen.findByRole("heading", { name: "Taskboard" })
     ).toBeVisible();
     expect(screen.getByText(/signed in as/i)).toHaveTextContent("user");
   });
@@ -80,7 +80,7 @@ describe("AuthGate", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Kanban Studio" })
+      await screen.findByRole("heading", { name: "Taskboard" })
     ).toBeVisible();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/login",
@@ -136,7 +136,7 @@ describe("AuthGate", () => {
       "Unable to sign out"
     );
     expect(
-      screen.getByRole("heading", { name: "Kanban Studio" })
+      screen.getByRole("heading", { name: "Taskboard" })
     ).toBeVisible();
   });
 
@@ -162,7 +162,7 @@ describe("AuthGate", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "Kanban Studio" })
+      await screen.findByRole("heading", { name: "Taskboard" })
     ).toBeVisible();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/register",
@@ -303,7 +303,7 @@ describe("AuthGate", () => {
       "Password is incorrect"
     );
     expect(
-      screen.getByRole("heading", { name: "Kanban Studio" })
+      screen.getByRole("heading", { name: "Taskboard" })
     ).toBeVisible();
   });
 

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTAINER_NAME="project-management-mvp-smoke"
-IMAGE_NAME="project-management-mvp:smoke"
-VOLUME_NAME="project-management-mvp-smoke-data"
+CONTAINER_NAME="taskboard-smoke"
+IMAGE_NAME="taskboard:smoke"
+VOLUME_NAME="taskboard-smoke-data"
 HOST_PORT="18000"
 
 cd "$ROOT_DIR"

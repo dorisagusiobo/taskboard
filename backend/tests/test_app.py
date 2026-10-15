@@ -18,7 +18,7 @@ def test_root_page_loads_html_and_calls_api(client):
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Project Management MVP" in response.text
+    assert "Taskboard" in response.text
     assert "API status: ok" in response.text
 
 

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTAINER_NAME="project-management-mvp-e2e"
-IMAGE_NAME="project-management-mvp:e2e"
-VOLUME_NAME="project-management-mvp-e2e-data"
+CONTAINER_NAME="taskboard-e2e"
+IMAGE_NAME="taskboard:e2e"
+VOLUME_NAME="taskboard-e2e-data"
 HOST_PORT="18001"
 FAKE_OPENROUTER_PORT="18002"
 FAKE_OPENROUTER_PID=""

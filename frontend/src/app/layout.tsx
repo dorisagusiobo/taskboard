@@ -13,7 +13,7 @@ const bodyFont = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Kanban Studio",
+  title: "Taskboard",
   description: "A focused, single-board kanban workspace.",
 };
 

@@ -5,7 +5,7 @@ const login = async (page: Page) => {
   await page.getByLabel("Username").fill("user");
   await page.getByLabel("Password").fill("password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
   await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
 };
 
@@ -36,7 +36,7 @@ test("requires sign in before showing the kanban board", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toHaveCount(0);
 });
 
 test("rejects invalid credentials", async ({ page }) => {
@@ -48,7 +48,7 @@ test("rejects invalid credentials", async ({ page }) => {
   await expect(page.locator("form").getByRole("alert")).toHaveText(
     "Invalid username or password."
   );
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toHaveCount(0);
 });
 
 test("creates a new account with its own seeded board", async ({ page }) => {
@@ -63,7 +63,7 @@ test("creates a new account with its own seeded board", async ({ page }) => {
   await page.getByLabel("Password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
   await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
   await expect(page.getByText(/signed in as/i)).toHaveText(
     `Signed in as ${username}`
@@ -74,7 +74,7 @@ test("creates a new account with its own seeded board", async ({ page }) => {
   await page.getByLabel("Username").fill(username);
   await page.getByLabel("Password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 });
 
 test("changes a password and requires the new one on the next sign-in", async ({
@@ -88,7 +88,7 @@ test("changes a password and requires the new one on the next sign-in", async ({
   await page.getByLabel("Username").fill(username);
   await page.getByLabel("Password").fill("original-password");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 
   await page.getByRole("button", { name: "Change password" }).click();
   await page.getByLabel("Current password").fill("wrong-current-password");
@@ -121,7 +121,7 @@ test("changes a password and requires the new one on the next sign-in", async ({
 
   await page.getByLabel("Password").fill("updated-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 });
 
 test("deletes an account after confirming the password, then frees the username", async ({
@@ -135,7 +135,7 @@ test("deletes an account after confirming the password, then frees the username"
   await page.getByLabel("Username").fill(username);
   await page.getByLabel("Password").fill("throwaway-password");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 
   await page.getByRole("button", { name: "Delete account" }).click();
   await page
@@ -143,7 +143,7 @@ test("deletes an account after confirming the password, then frees the username"
     .fill("wrong-password");
   await page.getByRole("button", { name: "Delete my account" }).click();
   await expect(page.getByText("Password is incorrect.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 
   await page
     .getByLabel("Confirm password to delete account")
@@ -171,7 +171,7 @@ test("deletes an account after confirming the password, then frees the username"
   await page.getByLabel("Username").fill(username);
   await page.getByLabel("Password").fill("a-different-password");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 });
 
 test("rejects creating an account with a username that is already taken", async ({
@@ -188,14 +188,14 @@ test("rejects creating an account with a username that is already taken", async 
   await expect(page.locator("form").getByRole("alert")).toHaveText(
     "That username is already taken."
   );
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toHaveCount(0);
 });
 
 test("keeps the session on refresh and signs out", async ({ page }) => {
   await login(page);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
   await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
 
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -245,7 +245,7 @@ test("creates, renames, switches, and deletes boards", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Delete Board" })).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Renamed board", exact: true })
   ).toHaveCount(0);
@@ -366,7 +366,7 @@ test("persists every board mutation through the API", async ({ page }) => {
   }
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
   await expect(
     page
       .locator('[data-testid^="column-"]')
@@ -656,7 +656,7 @@ test("uses AI through FastAPI and preserves validated changes", async ({ page })
   await expect(message).toHaveValue("");
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
   await expect(page.getByText("Manual before AI")).toBeVisible();
   await expect(page.getByText("AI single card")).toBeVisible();
   await expect(page.getByText("AI batch card")).toBeVisible();
@@ -680,7 +680,7 @@ test("keeps login, board forms, and chat usable from the keyboard on a narrow sc
   await expect(page.getByLabel("Password")).toBeFocused();
   await page.getByLabel("Password").fill("password");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Taskboard" })).toBeVisible();
 
   await page.getByRole("button", { name: "Ask AI" }).focus();
   await page.keyboard.press("Enter");

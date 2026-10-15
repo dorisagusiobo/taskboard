@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 
-$containerExists = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq 'project-management-mvp' }
+$containerExists = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq 'taskboard' }
 if ($containerExists) {
-    docker rm -f project-management-mvp | Out-Null
+    docker rm -f taskboard | Out-Null
 }
 
-Write-Host "Stopped project-management-mvp"
+Write-Host "Stopped taskboard"
