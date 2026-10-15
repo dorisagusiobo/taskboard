@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import type { DemoAccount } from "@/lib/api";
 
 type LoginFormProps = {
+  demoAccount: DemoAccount | null;
   error: string | null;
   isSubmitting: boolean;
   onLogin: (username: string, password: string) => Promise<void>;
@@ -10,6 +12,7 @@ type LoginFormProps = {
 };
 
 export const LoginForm = ({
+  demoAccount,
   error,
   isSubmitting,
   onLogin,
@@ -119,6 +122,24 @@ export const LoginForm = ({
               : "Need an account? Create one"}
           </button>
         </form>
+
+        {demoAccount && !isRegister ? (
+          <div className="mt-6 rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-4">
+            <p className="text-sm font-semibold text-[var(--navy-dark)]">Try the demo</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--gray-text)]">
+              Sign in as <strong>{demoAccount.username}</strong> with password{" "}
+              <strong>{demoAccount.password}</strong>. The demo resets from time to time.
+            </p>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => onLogin(demoAccount.username, demoAccount.password)}
+              className="mt-3 w-full rounded-full border border-[var(--secondary-purple)] px-5 py-2.5 text-sm font-semibold uppercase tracking-wide text-[var(--secondary-purple)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Open the demo board
+            </button>
+          </div>
+        ) : null}
       </section>
     </main>
   );

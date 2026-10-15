@@ -148,13 +148,15 @@ class BoardStore:
         self.database_path = Path(database_path)
 
     def _connect(self) -> sqlite3.Connection:
+        # Create the folder before connecting: sqlite3 can't create it, and a fresh
+        # host with no mounted volume (e.g. a free cloud instance) won't have it.
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
     def _ensure_schema(self, connection: sqlite3.Connection) -> None:
-        self.database_path.parent.mkdir(parents=True, exist_ok=True)
         connection.executescript(SCHEMA_SQL)
         user_columns = {
             row["name"] for row in connection.execute("PRAGMA table_info(users)")

@@ -1,0 +1,22 @@
+# Render Blueprint for the public Taskboard demo: https://render.com/docs/blueprint-spec
+# In Render, choose New > Blueprint, connect this repo, and paste your
+# OPENROUTER_API_KEY when prompted. Everything else is configured here.
+#
+# Free plan: the service sleeps when idle and its SQLite database resets on
+# each restart, so the demo account and its sample cards come back fresh.
+services:
+  - type: web
+    name: taskboard
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"
+      - key: COOKIE_SECURE
+        value: "true"

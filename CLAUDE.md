@@ -50,6 +50,8 @@ Whole-app / Docker (from repo root):
 
 On first run, a zero-config seed account (`user` / `password`) is auto-registered so the app works immediately (`BoardStore.ensure_seed_account`, only fires when the `users` table is empty). Real accounts now go through `POST /api/auth/register` (username 3-50 chars `[A-Za-z0-9_-]`, password 8+ chars) with PBKDF2-hashed passwords (`backend/auth.py`, stdlib-only, no new dependency); the frontend login screen has a "Create one" toggle for this. `POST /api/auth/login` verifies against the stored hash. Once signed in, `POST /api/auth/password` (`ChangePasswordForm` in the header) lets a user change their own password given the current one; there is no password-reset flow. `POST /api/auth/delete-account` (`DeleteAccountForm`, red-styled, requires re-entering the password) permanently deletes the account and, via `ON DELETE CASCADE`, every board it owned — irreversible, no soft-delete or undo.
 
+**Public demo mode** (`DEMO_MODE=true`, set in `render.yaml`): `GET /api/demo-account` returns the seed credentials (null otherwise), sessions report `is_demo` for the seed user, and `POST /api/auth/password` / `POST /api/auth/delete-account` return 403 for that user so the shared account always works. The frontend shows a one-click "Open the demo board" box and hides the account forms for the demo user. `COOKIE_SECURE=true` makes the session cookie HTTPS-only. The container listens on `$PORT` (default 8000).
+
 ## Architecture
 
 **Single-origin deployment**: Next.js builds a static export (`frontend/out`) that FastAPI mounts at `/` via `StaticFiles`; the production image runs no Node server. Frontend API calls must stay on relative `/api/*` paths so dev and Docker share one origin.

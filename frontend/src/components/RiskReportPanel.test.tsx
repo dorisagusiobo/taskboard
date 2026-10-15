@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { MockInstance } from "vitest";
 import { describeFinding, RiskReportPanel } from "@/components/RiskReportPanel";
 import type { RiskFinding, RiskReport } from "@/lib/api";
 
@@ -21,7 +22,7 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 describe("RiskReportPanel", () => {
   const onSessionExpired = vi.fn();
-  let fetchMock: ReturnType<typeof vi.spyOn>;
+  let fetchMock: MockInstance<typeof fetch>;
 
   beforeEach(() => {
     fetchMock = vi.spyOn(globalThis, "fetch");

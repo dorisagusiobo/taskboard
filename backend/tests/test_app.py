@@ -61,13 +61,13 @@ def test_register_creates_an_account_seeds_a_board_and_signs_in(client):
     )
 
     assert response.status_code == 201
-    assert response.json() == {"username": "new-teammate"}
+    assert response.json() == {"username": "new-teammate", "is_demo": False}
     cookie = response.headers["set-cookie"]
     assert cookie.startswith(f"{main.SESSION_COOKIE}=")
 
     session_response = client.get("/api/auth/me")
     assert session_response.status_code == 200
-    assert session_response.json() == {"username": "new-teammate"}
+    assert session_response.json() == {"username": "new-teammate", "is_demo": False}
 
     boards_response = client.get("/api/boards")
     assert boards_response.status_code == 200
@@ -110,7 +110,7 @@ def test_login_creates_a_signed_session_cookie(client):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"username": "user"}
+    assert response.json() == {"username": "user", "is_demo": False}
     cookie = response.headers["set-cookie"]
     assert cookie.startswith(f"{main.SESSION_COOKIE}=")
     assert "httponly" in cookie.lower()
@@ -120,7 +120,7 @@ def test_login_creates_a_signed_session_cookie(client):
 
     session_response = client.get("/api/auth/me")
     assert session_response.status_code == 200
-    assert session_response.json() == {"username": "user"}
+    assert session_response.json() == {"username": "user", "is_demo": False}
 
 
 def test_login_works_for_a_freshly_registered_account(client):
@@ -137,7 +137,7 @@ def test_login_works_for_a_freshly_registered_account(client):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"username": "second-user"}
+    assert response.json() == {"username": "second-user", "is_demo": False}
 
 
 @pytest.mark.parametrize(
