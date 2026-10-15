@@ -22,6 +22,7 @@ COPY backend/database.py ./database.py
 COPY backend/auth.py ./auth.py
 COPY backend/ai_service.py ./ai_service.py
 COPY backend/openrouter_client.py ./openrouter_client.py
+COPY backend/risk.py ./risk.py
 COPY --from=frontend-builder /app/frontend/out ./static
 
 EXPOSE 8000

@@ -196,6 +196,30 @@ export const sendAIMessage = (
     jsonOptions("POST", { message, history: history.slice(-20) })
   );
 
+export type RiskFinding = {
+  kind: "overdue" | "due_soon" | "no_due_date";
+  card_id: number;
+  title: string;
+  column: string;
+  due_date: string;
+  days: number;
+};
+
+export type RiskReport = {
+  findings: RiskFinding[];
+  summary: string | null;
+  next_steps: string[];
+};
+
+export const getRiskReport = (
+  boardId: number,
+  today: string = new Date().toISOString().slice(0, 10)
+) =>
+  request<RiskReport>(
+    `/api/boards/${boardId}/risk-report`,
+    jsonOptions("POST", { today })
+  );
+
 export const toBoardData = (board: ApiBoard): BoardData => {
   const cards = Object.fromEntries(
     board.columns.flatMap((column) =>
