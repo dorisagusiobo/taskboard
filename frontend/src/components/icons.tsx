@@ -100,3 +100,11 @@ export const DownloadIcon = ({ className }: IconProps = {}) => (
     <path d="M4 19h16" />
   </svg>
 );
+
+export const AlertIcon = ({ className }: IconProps = {}) => (
+  <svg {...baseProps} className={className}>
+    <path d="M12 3 2 20h20L12 3z" />
+    <path d="M12 10v4" />
+    <path d="M12 17h.01" />
+  </svg>
+);

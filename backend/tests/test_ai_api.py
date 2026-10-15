@@ -328,3 +328,167 @@ def test_ai_chat_rejects_more_than_twenty_history_messages_without_calling_provi
 
     assert response.status_code == 422
     assert fake_openrouter_client.calls == []
+
+
+@pytest.fixture
+def risk_board_id(authenticated_ai_client: TestClient) -> int:
+    board = authenticated_ai_client.post("/api/boards", json={"name": "Risky"}).json()
+    columns = board["columns"]
+    for column_index, title, due_date in [
+        (2, "Late launch email", "2026-10-10"),
+        (3, "Review contract", ""),
+        (4, "Finished late", "2026-01-01"),
+    ]:
+        response = authenticated_ai_client.post(
+            f"/api/boards/{board['id']}/cards",
+            json={
+                "column_id": columns[column_index]["id"],
+                "title": title,
+                "due_date": due_date,
+            },
+        )
+        assert response.status_code == 201
+    return board["id"]
+
+
+def test_risk_report_requires_authentication(
+    ai_client: TestClient, fake_openrouter_client: FakeOpenRouterClient
+):
+    response = ai_client.post("/api/boards/1/risk-report", json={"today": "2026-10-15"})
+
+    assert response.status_code == 401
+    assert fake_openrouter_client.calls == []
+
+
+def test_risk_report_returns_findings_and_grounded_ai_summary(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+    risk_board_id: int,
+):
+    fake_openrouter_client.response = json.dumps(
+        {
+            "summary": "Late launch email is 5 days overdue.",
+            "next_steps": ["Finish the launch email today."],
+        }
+    )
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{risk_board_id}/risk-report", json={"today": "2026-10-15"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [(f["kind"], f["title"], f["days"]) for f in body["findings"]] == [
+        ("overdue", "Late launch email", 5),
+        ("no_due_date", "Review contract", 0),
+    ]
+    assert body["summary"] == "Late launch email is 5 days overdue."
+    assert body["next_steps"] == ["Finish the launch email today."]
+
+    messages, schema = fake_openrouter_client.calls[0]
+    assert schema["required"] == ["summary", "next_steps"]
+    assert "Late launch email" in messages[0]["content"]
+    assert "Finished late" not in messages[0]["content"]
+
+
+def test_risk_report_skips_the_ai_when_nothing_is_at_risk(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+):
+    board = authenticated_ai_client.post("/api/boards", json={"name": "Calm"}).json()
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{board['id']}/risk-report", json={"today": "2026-10-15"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"findings": [], "summary": None, "next_steps": []}
+    assert fake_openrouter_client.calls == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OpenRouterConfigurationError("missing key"),
+        OpenRouterRequestError("down"),
+    ],
+)
+def test_risk_report_still_returns_findings_when_the_ai_fails(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+    risk_board_id: int,
+    error: Exception,
+):
+    fake_openrouter_client.error = error
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{risk_board_id}/risk-report", json={"today": "2026-10-15"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["findings"]) == 2
+    assert body["summary"] is None
+    assert body["next_steps"] == []
+
+
+def test_risk_report_drops_an_invalid_ai_summary(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+    risk_board_id: int,
+):
+    fake_openrouter_client.response = json.dumps(
+        {"summary": "Too many steps.", "next_steps": ["a", "b", "c", "d"]}
+    )
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{risk_board_id}/risk-report", json={"today": "2026-10-15"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["summary"] is None
+
+
+def test_risk_report_is_scoped_to_the_signed_in_users_board(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+):
+    authenticated_ai_client.post("/api/auth/logout")
+    authenticated_ai_client.post(
+        "/api/auth/register", json={"username": "other", "password": "password123"}
+    )
+    other_board_id = authenticated_ai_client.get("/api/boards").json()[0]["id"]
+    authenticated_ai_client.post("/api/auth/logout")
+    authenticated_ai_client.post(
+        "/api/auth/login", json={"username": "user", "password": "password"}
+    )
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{other_board_id}/risk-report", json={"today": "2026-10-15"}
+    )
+
+    assert response.status_code == 404
+    assert fake_openrouter_client.calls == []
+
+
+def test_risk_report_retries_once_after_a_cut_off_ai_response(
+    authenticated_ai_client: TestClient,
+    fake_openrouter_client: FakeOpenRouterClient,
+    risk_board_id: int,
+):
+    responses = iter(
+        [
+            '{"summary": "Late launch email is',
+            json.dumps({"summary": "Late launch email is overdue.", "next_steps": []}),
+        ]
+    )
+    fake_openrouter_client.complete_structured = (  # type: ignore[method-assign]
+        lambda messages, schema: next(responses)
+    )
+
+    response = authenticated_ai_client.post(
+        f"/api/boards/{risk_board_id}/risk-report", json={"today": "2026-10-15"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "Late launch email is overdue."

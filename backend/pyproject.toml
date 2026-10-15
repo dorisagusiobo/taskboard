@@ -27,6 +27,7 @@ addopts = [
   "--cov=database",
   "--cov=ai_service",
   "--cov=openrouter_client",
+  "--cov=risk",
   "--cov-branch",
   "--cov-report=term-missing",
   "--cov-fail-under=80",

@@ -12,6 +12,7 @@ Taskboard is a local-first project management app for small teams. You keep a cl
 - **Due dates and labels.** Overdue cards get a red badge. Up to five labels per card, set by hand or by the assistant.
 - **Search.** Filter cards by title, details or label. Press `/` to jump to search and `Escape` to clear it.
 - **Export.** Download any board as CSV or JSON.
+- **What's at risk.** One click checks the board for overdue cards, cards due in the next three days, and work in progress or review with no due date. The AI turns those findings into a short plain-language summary with up to three next steps.
 
 ## Design decisions
 
@@ -19,6 +20,7 @@ Taskboard is a local-first project management app for small teams. You keep a cl
 - **No setup before value.** A ready-made account and sample cards on first launch let someone try it in seconds.
 - **Destructive actions need confirmation.** Deleting an account asks for the password again, because it can't be undone.
 - **The AI proposes, the app validates.** Assistant changes go through the same validation as manual edits, so a bad model response can't corrupt a board.
+- **The app finds the facts, the AI explains them.** The risk check is plain code, so it's predictable and tested. The AI only sees those findings, so its summary can't invent cards or dates, and the findings still show if the AI is unavailable.
 
 ## How it works
 
@@ -37,12 +39,12 @@ SQLite (users, boards, cards)        Single Docker container
 | Frontend | Next.js, React, TypeScript, Tailwind CSS |
 | Backend | Python, FastAPI, SQLite |
 | AI | OpenRouter (`openai/gpt-oss-120b`) |
-| Testing | pytest (114 tests, 97% coverage), Vitest (79 tests), Playwright end-to-end, Docker smoke tests |
+| Testing | pytest (125 tests, 98% coverage), Vitest (86 tests), Playwright end-to-end, Docker smoke tests |
 | Delivery | Docker, start/stop scripts for macOS, Linux and Windows |
 
 ## Credits
 
-Taskboard started from the kanban project template in [Ed Donner](https://github.com/ed-donner)'s AI engineering course ([ed-donner/pm](https://github.com/ed-donner/pm)). The template provided a front-end-only kanban demo and the build plan. I built everything else: the FastAPI backend and database, authentication and account management, the AI assistant, multiple boards, due dates and labels, search, export, Docker packaging and the test suites.
+Taskboard started from the kanban project template in [Ed Donner](https://github.com/ed-donner)'s AI engineering course ([ed-donner/pm](https://github.com/ed-donner/pm)). The template provided a front-end-only kanban demo and the build plan. I built everything else: the FastAPI backend and database, authentication and account management, the AI assistant, the What's at risk report, multiple boards, due dates and labels, search, export, Docker packaging and the test suites.
 
 Built by **Doris Agusiobo Echianu**, AI engineer and designer. [Portfolio](https://doris-agusiobo-echianu.vercel.app) · [LinkedIn](https://www.linkedin.com/in/doris-agusiobo-echianu-83571764)
 
@@ -83,7 +85,7 @@ To stop the container:
 ## Tests
 
 ```bash
-cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy main.py database.py ai_service.py openrouter_client.py auth.py && uv run pytest -q
+cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy main.py database.py ai_service.py openrouter_client.py auth.py risk.py && uv run pytest -q
 cd frontend && npm run lint && npm run test:unit && npm run build
 ./scripts/smoke-test-docker.sh
 ./scripts/test-e2e-docker.sh

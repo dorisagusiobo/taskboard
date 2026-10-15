@@ -16,7 +16,7 @@ Run from `backend/` (uses `uv`):
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy main.py database.py ai_service.py openrouter_client.py auth.py
+uv run mypy main.py database.py ai_service.py openrouter_client.py auth.py risk.py
 uv run pytest -q                          # full suite, 80% coverage gate (main/database/ai_service/openrouter_client)
 uv run pytest -q tests/test_board_api.py  # single file
 uv run pytest -q tests/test_board_api.py::test_name  # single test
@@ -70,6 +70,8 @@ Auth is always resolved server-side from the signed session (`request.session["u
 **AI mutation path**: `POST /api/boards/{board_id}/ai/chat` sends that board's canonical state + up to 20 prior messages (kept client-side only, never persisted) to OpenRouter (`openai/gpt-oss-120b`) requesting strict JSON Schema output. The response is re-validated server-side, and any `operations` (create_card/edit_card/move_card, max 20) are applied through the *same* `BoardStore` mutation methods manual edits use, in one transaction, scoped to that board — invalid output rolls back entirely and never partially updates the board. The system prompt includes today's date so the model can resolve relative due dates ("tomorrow"). Full contract in `docs/AI.md`.
 
 **Card due dates and labels**: `cards.due_date` is `''` (no due date) or `YYYY-MM-DD`; `cards.labels` is `''` (none) or a comma-separated list (at most 5, 24 chars each). Both are validated identically but independently (see `backend/AGENTS.md`) in `main.py` and `ai_service.py`, and both follow the same PATCH convention: field absent/null leaves it unchanged, `""` clears it. `frontend/src/lib/kanban.ts`'s `isOverdue` is the single source of truth for overdue styling (`due_date < today`, string comparison); there's no separate "done" flag, so a card can be overdue regardless of which column it's in. `parseLabels`/`formatLabels` convert the wire string to/from a `string[]` for display, and `labelAccent` deterministically hashes a label to one of 3 fixed palette colors — purely a display concern, nothing color-related is stored server-side.
+
+**Risk report**: `POST /api/boards/{board_id}/risk-report` (body `{today}`) returns deterministic findings from `backend/risk.py` (overdue, due within 3 days, In Progress/Review cards with no due date; Done column skipped) plus a best-effort AI summary built from those findings only. AI failures degrade to `summary: null`, never an error. `RiskReportPanel` (next to Export) shows it as a dropdown that closes on Escape. Contract in `docs/AI.md`.
 
 **Card search**: purely client-side, no backend involvement. `KanbanBoard` holds a `searchQuery` string; `lib/kanban.ts`'s `cardMatchesQuery` does a case-insensitive substring match against title, details, and labels. Non-matching cards get a `hidden` CSS class rather than being removed from the DOM or from `@dnd-kit`'s per-column `SortableContext` — removing them would break drag-index math — and a card being edited is never hidden even if the query no longer matches it. A global keydown listener focuses the search box on `/` (unless a text field already has focus) and clears it on `Escape`.
 

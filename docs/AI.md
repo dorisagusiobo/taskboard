@@ -55,3 +55,21 @@ The backend validates the JSON again after receipt. When operations are present,
 ## Browser behavior
 
 The **Ask AI** drawer keeps the current draft and conversation in browser memory. It sends only the latest 20 prior messages, renders replies as plain text, and prevents overlapping board mutations. A successful mutation replaces the visible board with the canonical board returned by FastAPI. A failed request leaves the last confirmed board and message draft unchanged so the user can retry.
+
+## Risk report
+
+`POST /api/boards/{board_id}/risk-report` takes `{"today": "YYYY-MM-DD"}` (the browser's date, the same one the overdue badges use) and returns:
+
+```json
+{
+  "findings": [
+    {"kind": "overdue", "card_id": 1, "title": "Launch email", "column": "In Progress", "due_date": "2026-10-09", "days": 6}
+  ],
+  "summary": "Plain-language summary, or null",
+  "next_steps": ["Up to three steps"]
+}
+```
+
+Findings are computed in `backend/risk.py`, not by the model. Cards in the Done column (position 4) are skipped. Each card appears once, under its most urgent kind: `overdue` (`days` past due), `due_soon` (due within 3 days; `days` left), or `no_due_date` (In Progress or Review with no due date). Findings are sorted by kind, then urgency.
+
+When there are findings, the backend sends only the findings and today's date to OpenRouter with a strict schema (`summary` up to 600 characters, at most 3 `next_steps` of 200 characters). An unreadable or invalid response is retried once. If the AI is not configured, unavailable, or still invalid, the endpoint returns the findings with `summary: null` and `next_steps: []` and logs a warning; it never fails because of the AI. With no findings the AI is not called.

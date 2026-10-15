@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 from collections.abc import Callable
@@ -12,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import (
     AfterValidator,
     BaseModel,
+    ConfigDict,
     Field,
     StringConstraints,
     model_validator,
@@ -36,6 +38,9 @@ from openrouter_client import (
     OpenRouterConfigurationError,
     OpenRouterRequestError,
 )
+from risk import RiskFinding, find_risks
+
+logger = logging.getLogger(__name__)
 
 APP_ROOT = Path(__file__).resolve().parent
 STATIC_DIR = APP_ROOT / "static"
@@ -215,6 +220,19 @@ class MoveCardRequest(BaseModel):
 class AIChatResponse(BaseModel):
     reply: str
     board: BoardResponse | None
+
+
+class RiskReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Sent by the browser so "overdue" matches the overdue badges on the board.
+    today: date
+
+
+class RiskReportResponse(BaseModel):
+    findings: list[RiskFinding]
+    summary: str | None
+    next_steps: list[str]
 
 
 def create_app(
@@ -484,6 +502,32 @@ def create_app(
         return AIChatResponse(
             reply=ai_response.reply,
             board=BoardResponse.model_validate(updated_board),
+        )
+
+    @app.post("/api/boards/{board_id}/risk-report", response_model=RiskReportResponse)
+    def risk_report(board_id: int, payload: RiskReportRequest, request: Request):
+        board = board_store.get_board(authenticated_username(request), board_id)
+        findings = find_risks(board, payload.today)
+        if not findings:
+            return RiskReportResponse(findings=[], summary=None, next_steps=[])
+
+        # The findings stand on their own; the AI summary is a best-effort extra.
+        try:
+            summary = AIService(resolved_openrouter_client_factory()).summarize_risks(
+                [finding.model_dump() for finding in findings], payload.today
+            )
+        except (
+            OpenRouterConfigurationError,
+            OpenRouterRequestError,
+            AIResponseError,
+        ) as error:
+            logger.warning("Risk summary unavailable: %s", error)
+            return RiskReportResponse(findings=findings, summary=None, next_steps=[])
+
+        return RiskReportResponse(
+            findings=findings,
+            summary=summary.summary,
+            next_steps=summary.next_steps,
         )
 
     if STATIC_DIR.is_dir():

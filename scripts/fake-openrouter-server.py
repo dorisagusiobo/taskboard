@@ -15,8 +15,23 @@ def board_from_messages(messages: list[dict[str, Any]]) -> dict[str, Any]:
     return json.loads(system_content.split(BOARD_MARKER, 1)[1])
 
 
+RISK_MARKER = "Risk findings JSON:\n"
+
+
+def risk_summary_response(messages: list[dict[str, Any]]) -> str:
+    findings = json.loads(str(messages[0]["content"]).split(RISK_MARKER, 1)[1])
+    first = findings[0]["title"]
+    result = {
+        "summary": f"{len(findings)} cards need attention, starting with {first}.",
+        "next_steps": [f"Start with {first}."],
+    }
+    return json.dumps(result, separators=(",", ":"))
+
+
 def structured_response(payload: dict[str, Any]) -> str:
     messages = payload["messages"]
+    if RISK_MARKER in str(messages[0]["content"]):
+        return risk_summary_response(messages)
     message = str(messages[-1]["content"])
     normalized = message.lower()
     board = board_from_messages(messages)

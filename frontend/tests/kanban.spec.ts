@@ -692,3 +692,27 @@ test("keeps login, board forms, and chat usable from the keyboard on a narrow sc
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Ask AI" })).toBeFocused();
 });
+
+test("shows what's at risk with an AI summary grounded in the board", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByLabel("New card title").fill("Quarterly memo draft");
+  await firstColumn.getByLabel("New card due date").fill("2000-01-01");
+  await Promise.all([
+    waitForMutation(page, /\/api\/boards\/\d+\/cards$/, "POST"),
+    firstColumn.getByRole("button", { name: "Add card" }).click(),
+  ]);
+
+  await page.getByRole("button", { name: "What's at risk" }).click();
+  const panel = page.getByRole("region", { name: "Risk report" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText(/starting with Quarterly memo draft\./)).toBeVisible();
+  await expect(panel.getByText("Start with Quarterly memo draft.")).toBeVisible();
+  await expect(panel.getByText(/^Overdue \(\d+\)$/)).toBeVisible();
+  await expect(panel.getByText("Quarterly memo draft", { exact: true })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+});

@@ -18,6 +18,7 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { AIChatSidebar } from "@/components/AIChatSidebar";
 import { BoardSwitcher } from "@/components/BoardSwitcher";
 import { ExportBoardMenu } from "@/components/ExportBoardMenu";
+import { RiskReportPanel } from "@/components/RiskReportPanel";
 import { ChatIcon, CloseIcon, SearchIcon } from "@/components/icons";
 import {
   ApiError,
@@ -423,6 +424,12 @@ export const KanbanBoard = ({ onSessionExpired }: KanbanBoardProps) => {
                 onDelete={handleDeleteBoard}
               />
               <ExportBoardMenu board={board} isDisabled={isMutating} />
+              <RiskReportPanel
+                key={board.id}
+                boardId={board.id}
+                isDisabled={isMutating}
+                onSessionExpired={onSessionExpired}
+              />
             </div>
             <div className="relative w-full max-w-xs">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gray-text)]" />

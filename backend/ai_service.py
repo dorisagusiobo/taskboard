@@ -318,9 +318,90 @@ def build_messages(
     return messages
 
 
+SummaryText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)
+]
+NextStep = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+]
+
+
+class RiskSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: SummaryText
+    next_steps: list[NextStep] = Field(max_length=3)
+
+
+RISK_SUMMARY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600,
+            "description": "Two or three plain-language sentences on what is at risk.",
+        },
+        "next_steps": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {"type": "string", "minLength": 1, "maxLength": 200},
+            "description": "Up to three concrete next steps, most urgent first.",
+        },
+    },
+    "required": ["summary", "next_steps"],
+}
+
+RISK_INSTRUCTIONS_TEMPLATE = """You summarize risks on a project board.
+Today's date is {today}. The findings below were computed by the application and
+are the only facts you may use. Never mention cards, dates, or people that are
+not in the findings, and never claim something is done or fixed.
+
+Kinds: "overdue" (days = days past due), "due_soon" (days = days left),
+"no_due_date" (active work with no deadline).
+
+Write a calm, plain-language summary of two or three sentences (under 400
+characters) that names the most urgent cards by title. Put up to three short,
+concrete next steps, most urgent first, only in next_steps; never list or
+number them inside the summary. No Markdown.
+
+Risk findings JSON:
+"""
+
+
+def build_risk_messages(
+    findings: list[dict[str, Any]], today: date
+) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": RISK_INSTRUCTIONS_TEMPLATE.format(today=today.isoformat())
+            + json.dumps(findings, separators=(",", ":"), sort_keys=True),
+        },
+        {"role": "user", "content": "Summarize what is at risk on this board."},
+    ]
+
+
 class AIService:
     def __init__(self, client: StructuredCompletionClient):
         self.client = client
+
+    def summarize_risks(
+        self, findings: list[dict[str, Any]], today: date
+    ) -> RiskSummary:
+        # The model occasionally stops mid-response; one retry recovers in practice.
+        messages = build_risk_messages(findings, today)
+        last_error: ValidationError | None = None
+        for _ in range(2):
+            raw_response = self.client.complete_structured(
+                messages, RISK_SUMMARY_SCHEMA
+            )
+            try:
+                return RiskSummary.model_validate_json(raw_response)
+            except ValidationError as error:
+                last_error = error
+        raise AIResponseError("AI returned an invalid response") from last_error
 
     def respond(
         self,
